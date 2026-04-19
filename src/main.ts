@@ -63,41 +63,37 @@ const SEEDED_FOLDER_ICONS: Record<string, string> = {
     'Личное': 'heart'
 };
 
-// Second-level seed — user-specific (Scriptorium vault). Safe to leave in: these seeds only
-// apply if the exact path exists in the vault, otherwise they are skipped.
-interface SecondLevelSeed {
-    icon: string;
-    color: string;
-}
-
-const SEEDED_SECOND_LEVEL: Record<string, SecondLevelSeed> = {
+// Second-level seed — user-specific (Scriptorium vault). Icons only; colors are intentionally
+// reserved for root-level folders per user preference. Harmless on vaults that don't have
+// these exact paths — seeds skip missing folders.
+const SEEDED_SECOND_LEVEL: Record<string, string> = {
     // Сеть
-    'Сеть/Команда': { icon: 'users-round', color: '#A0C4FF' },
-    'Сеть/Партнёры': { icon: 'handshake', color: '#BDB2FF' },
-    'Сеть/Клиенты': { icon: 'user-check', color: '#B5EAD7' },
-    'Сеть/Наставники': { icon: 'graduation-cap', color: '#FFD6A5' },
-    'Сеть/Лиды': { icon: 'zap', color: '#FDFFB6' },
-    'Сеть/Сообщество': { icon: 'globe', color: '#9BF6FF' },
-    'Сеть/Организации': { icon: 'building-2', color: '#FFC6FF' },
+    'Сеть/Команда': 'users-round',
+    'Сеть/Партнёры': 'handshake',
+    'Сеть/Клиенты': 'user-check',
+    'Сеть/Наставники': 'graduation-cap',
+    'Сеть/Лиды': 'zap',
+    'Сеть/Сообщество': 'globe',
+    'Сеть/Организации': 'building-2',
 
     // Знания
-    'Знания/Дизайн': { icon: 'palette', color: '#FFC6FF' },
-    'Знания/Разработка': { icon: 'code', color: '#A0C4FF' },
-    'Знания/Продуктивность': { icon: 'timer', color: '#CAFFBF' },
-    'Знания/Промпты': { icon: 'message-square', color: '#BDB2FF' },
+    'Знания/Дизайн': 'palette',
+    'Знания/Разработка': 'code',
+    'Знания/Продуктивность': 'timer',
+    'Знания/Промпты': 'message-square',
 
     // Личное
-    'Личное/Гитара': { icon: 'music', color: '#FFD6A5' },
-    'Личное/Психология': { icon: 'brain', color: '#FFC6FF' },
-    'Личное/Покупки': { icon: 'shopping-cart', color: '#B5EAD7' },
+    'Личное/Гитара': 'music',
+    'Личное/Психология': 'brain',
+    'Личное/Покупки': 'shopping-cart',
 
     // Звонки
-    'Звонки/Транскрипты': { icon: 'mic', color: '#FFADAD' },
-    'Звонки/Обработанные': { icon: 'sparkles', color: '#FDFFB6' },
+    'Звонки/Транскрипты': 'mic',
+    'Звонки/Обработанные': 'sparkles',
 
     // Финансы
-    'Финансы/Платежи': { icon: 'receipt', color: '#CAFFBF' },
-    'Финансы/Расходы': { icon: 'minus-circle', color: '#FFADAD' }
+    'Финансы/Платежи': 'receipt',
+    'Финансы/Расходы': 'minus-circle'
 };
 
 const DEFAULT_DATA: FileTreeData = {
@@ -155,20 +151,29 @@ export default class FileTreePlugin extends Plugin {
             await this.saveData(this.data);
         }
 
-        // Seed second-level folder icons + colors for user's vault. Only applies to exact paths
-        // that actually exist in the vault — stray seeds are harmless.
+        // Seed second-level folder icons for user's vault. Only paths that actually exist
+        // get the icon; stray seeds are harmless. Colors are intentionally not seeded here —
+        // see the migration below.
         if (!this.data.seededSecondLevel) {
             const icons = { ...this.data.folderIcons };
-            const colors = { ...this.data.folderColors };
-            for (const [path, seed] of Object.entries(SEEDED_SECOND_LEVEL)) {
+            for (const [path, icon] of Object.entries(SEEDED_SECOND_LEVEL)) {
                 if (icons[path] === undefined) {
-                    icons[path] = seed.icon;
-                }
-                if (colors[path] === undefined) {
-                    colors[path] = seed.color;
+                    icons[path] = icon;
                 }
             }
-            this.data = { ...this.data, folderIcons: icons, folderColors: colors, seededSecondLevel: true };
+            this.data = { ...this.data, folderIcons: icons, seededSecondLevel: true };
+            await this.saveData(this.data);
+        }
+
+        // One-time migration: drop any folderColors on non-root folders (paths containing '/').
+        // Personal preference — only root folders carry a color; deeper folders fall back to
+        // the default icon tint. The migration flag lives under the seededSecondLevel key since
+        // colors-beyond-root were only ever seeded by the earlier second-level seeding pass.
+        const nonRootColorEntries = Object.keys(this.data.folderColors).filter(p => p.includes('/'));
+        if (nonRootColorEntries.length > 0) {
+            const colors = { ...this.data.folderColors };
+            nonRootColorEntries.forEach(p => delete colors[p]);
+            this.data = { ...this.data, folderColors: colors };
             await this.saveData(this.data);
         }
 
