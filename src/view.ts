@@ -347,17 +347,17 @@ export class FileTreeView extends ItemView {
         const resolvedPins = pinnedPaths
             .map(p => this.app.vault.getAbstractFileByPath(p))
             .filter((f): f is TAbstractFile => f !== null);
-        if (resolvedPins.length > 0) {
+        // Pins show only when viewing the vault root — treat the pinned section as
+        // "favorites" belonging to the top-level view. When drilled into a subfolder, the
+        // section is hidden. Pinned folders render as single links (no expand, no chevron)
+        // and one-click drills into them; pinned files one-click open.
+        const isVaultRootView = viewRoot.path === '/' || viewRoot.path === '';
+        if (isVaultRootView && resolvedPins.length > 0) {
             const section = this.scroller.createDiv({ cls: 'ft-pinned-section' });
             section.createDiv({ cls: 'ft-pinned-label', text: 'Pinned' });
             resolvedPins.forEach(target => {
                 if (target instanceof TFolder) {
                     this.renderFolderRow(target, 0, { pinned: true, parent: section });
-                    // Pinned folders expand independently from the main tree — use a separate
-                    // state set and keep rendering into the same pinned-section host.
-                    if (this.expandedInPinned.has(target.path)) {
-                        this.renderFolderChildren(target, 1, 'pinned', section);
-                    }
                 } else if (target instanceof TFile) {
                     this.renderFileRow(target, 0, { pinned: true, parent: section });
                 }
@@ -673,11 +673,21 @@ export class FileTreeView extends ItemView {
         const ctx: 'main' | 'pinned' = row.dataset.context === 'pinned' ? 'pinned' : 'main';
 
         if (target instanceof TFolder) {
+            // Pinned folders are single-click drill-in shortcuts — no expand mechanics.
+            if (ctx === 'pinned') {
+                this.setViewRoot(target);
+                const indexPath = target.path === '/' ? INDEX_FILE_NAME : `${target.path}/${INDEX_FILE_NAME}`;
+                const indexFile = this.app.vault.getFileByPath(indexPath);
+                if (indexFile && this.app.workspace.getActiveFile()?.path !== indexFile.path) {
+                    void this.app.workspace.getLeaf('tab').openFile(indexFile);
+                }
+                return;
+            }
             if (chevronClick) {
                 this.toggleFolder(target.path, ctx);
                 return;
             }
-            // Single click on folder name: toggle (deferred so a dblclick can cancel).
+            // Single click on folder name in the main tree: toggle (deferred so a dblclick can cancel).
             this.schedulePendingFolderToggle(target.path, ctx);
             return;
         }

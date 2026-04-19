@@ -246,6 +246,11 @@
     display: none;
 }
 
+/* Pinned folder rows are single-click links — no chevron, no expand affordance. */
+.ft-pinned-section .ft-row--folder .ft-chevron {
+    display: none;
+}
+
 /* Pinned file rows sit flush-left — no icon-less compensation, no extra body padding. */
 .ft-pinned-section .ft-row--file {
     padding-left: 10px;
