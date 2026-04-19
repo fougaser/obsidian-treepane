@@ -520,7 +520,7 @@ export class FileTreeView extends ItemView {
         }
 
         if (target instanceof TFile) {
-            void this.app.workspace.getLeaf(false).openFile(target);
+            void this.app.workspace.getLeaf(false).openFile(target, { active: true });
         }
     }
 
