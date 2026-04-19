@@ -1,0 +1,20 @@
+{
+  "name": "obsidian-treepane",
+  "version": "0.1.0",
+  "description": "Minimal single-pane file tree for Obsidian's left sidebar.",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "author": "fougaser",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "builtin-modules": "^5.0.0",
+    "esbuild": "^0.25.8",
+    "obsidian": "^1.11.0",
+    "tslib": "^2.8.1",
+    "typescript": "^5.8.3"
+  }
+}
