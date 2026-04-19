@@ -4,6 +4,9 @@ import { iconForFile } from './icons';
 import { attachDnd } from './dnd';
 import { openContextMenu } from './menu';
 import { openAppearanceModal } from './appearanceModal';
+import { IconPickerModal } from './iconPickerModal';
+
+const CLICK_DELAY_MS = 220;
 
 export const FILE_TREE_VIEW_TYPE = 'obsidian-treepane-view';
 
@@ -61,6 +64,8 @@ export class FileTreeView extends ItemView {
     private previewCache: Map<string, string> = new Map();
     private previewInflight: Set<string> = new Set();
     private viewRootPath: string = '/';
+    // Single-click on a folder name is deferred by CLICK_DELAY_MS so a dblclick can cancel it.
+    private pendingFolderClick: { path: string; timer: number } | null = null;
 
     constructor(leaf: WorkspaceLeaf, plugin: FileTreePlugin) {
         super(leaf);
@@ -90,6 +95,7 @@ export class FileTreeView extends ItemView {
         attachDnd(this.scroller, this.app, path => this.app.vault.getAbstractFileByPath(path));
         this.scroller.addEventListener('contextmenu', evt => this.handleContextMenu(evt));
         this.scroller.addEventListener('click', evt => this.handleClick(evt));
+        this.scroller.addEventListener('dblclick', evt => this.handleDoubleClick(evt));
 
         const vault = this.app.vault;
         this.registerEvent(vault.on('create', () => this.scheduleRender()));
@@ -395,9 +401,9 @@ export class FileTreeView extends ItemView {
 
         row.createSpan({ cls: 'ft-name', text: folder.name || this.app.vault.getName() });
 
-        const fileChildrenCount = folder.children.filter(c => c instanceof TFile).length;
-        if (fileChildrenCount > 0) {
-            row.createSpan({ cls: 'ft-count', text: String(fileChildrenCount) });
+        const totalChildren = folder.children.length;
+        if (totalChildren > 0) {
+            row.createSpan({ cls: 'ft-count', text: String(totalChildren) });
         }
 
         this.rowByPath.set(folder.path, row);
@@ -507,21 +513,8 @@ export class FileTreeView extends ItemView {
                 this.toggleFolder(target.path);
                 return;
             }
-            const isExpanded = this.expanded.has(target.path);
-            if (!isExpanded) {
-                // First click on a collapsed folder name just expands.
-                this.expanded.add(target.path);
-                this.queuePersist();
-                this.scheduleRender();
-                return;
-            }
-            // Already expanded — promote to view root (drill in), open its index.md if present.
-            this.setViewRoot(target);
-            const indexPath = target.path === '/' ? INDEX_FILE_NAME : `${target.path}/${INDEX_FILE_NAME}`;
-            const indexFile = this.app.vault.getFileByPath(indexPath);
-            if (indexFile && this.app.workspace.getActiveFile()?.path !== indexFile.path) {
-                void this.app.workspace.getLeaf('tab').openFile(indexFile);
-            }
+            // Single click on folder name: toggle (deferred so a dblclick can cancel).
+            this.schedulePendingFolderToggle(target.path);
             return;
         }
 
@@ -532,6 +525,63 @@ export class FileTreeView extends ItemView {
             const recent = this.app.workspace.getMostRecentLeaf();
             const leaf = recent ?? this.app.workspace.getLeaf('tab');
             void leaf.openFile(target, { active: true });
+        }
+    }
+
+    private schedulePendingFolderToggle(path: string): void {
+        this.cancelPendingFolderClick();
+        const timer = window.setTimeout(() => {
+            this.pendingFolderClick = null;
+            this.toggleFolder(path);
+        }, CLICK_DELAY_MS);
+        this.pendingFolderClick = { path, timer };
+    }
+
+    private cancelPendingFolderClick(): void {
+        if (this.pendingFolderClick) {
+            window.clearTimeout(this.pendingFolderClick.timer);
+            this.pendingFolderClick = null;
+        }
+    }
+
+    private handleDoubleClick(evt: MouseEvent): void {
+        if (!(evt.target instanceof Element)) {
+            return;
+        }
+        const row = evt.target.closest<HTMLElement>('.ft-row--folder');
+        if (!row) {
+            return;
+        }
+        const path = row.dataset.path;
+        if (!path) {
+            return;
+        }
+        const target = this.app.vault.getAbstractFileByPath(path);
+        if (!(target instanceof TFolder)) {
+            return;
+        }
+
+        // A dblclick is preceded by two `click` events; we cancel any queued single-click
+        // work here so the folder doesn't flap open/closed before the dblclick action lands.
+        this.cancelPendingFolderClick();
+
+        const onIcon = (evt.target as Element).closest('.ft-icon, .ft-chevron') !== null;
+        if (onIcon) {
+            new IconPickerModal(this.app, {
+                currentIconId: this.plugin.getFolderIcon(target.path),
+                onPick: iconId => {
+                    void this.plugin.setFolderIcon(target.path, iconId);
+                }
+            }).open();
+            return;
+        }
+
+        // Any other part of the folder row → drill in.
+        this.setViewRoot(target);
+        const indexPath = target.path === '/' ? INDEX_FILE_NAME : `${target.path}/${INDEX_FILE_NAME}`;
+        const indexFile = this.app.vault.getFileByPath(indexPath);
+        if (indexFile && this.app.workspace.getActiveFile()?.path !== indexFile.path) {
+            void this.app.workspace.getLeaf('tab').openFile(indexFile);
         }
     }
 
