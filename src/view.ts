@@ -516,10 +516,13 @@ export class FileTreeView extends ItemView {
         }
 
         if (target instanceof TFile) {
-            // getLeaf(false) returns the *currently active* leaf — which is us when the user
-            // just clicked inside the sidebar, so opening would replace the tree with the file.
-            // Prefer the most recent main-area leaf; fall back to a fresh tab if none exists.
-            const recent = this.app.workspace.getMostRecentLeaf();
+            // getLeaf(false) / getMostRecentLeaf() without a root argument may return the
+            // sidebar leaf we're rendering in (because the user just clicked *us*). Scope to
+            // the main-area root split so we always hit an editor tab, never the sidebar.
+            const rootSplit = this.app.workspace.rootSplit;
+            const recent = rootSplit
+                ? this.app.workspace.getMostRecentLeaf(rootSplit)
+                : this.app.workspace.getMostRecentLeaf();
             const leaf = recent ?? this.app.workspace.getLeaf('tab');
             void leaf.openFile(target, { active: true });
         }
