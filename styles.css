@@ -193,7 +193,7 @@
 /* Nested files without an icon compensate only for the missing icon column so their
    names read as tree-children. Slightly tighter gap than the icon+row-gap sum. */
 .ft-row--file.ft-row--nested:not(:has(.ft-icon)) .ft-file-body {
-    padding-left: 18px;
+    padding-left: 8px;
 }
 
 .ft-row--file:not(.ft-row--nested):not(:has(.ft-icon)) .ft-file-body {
