@@ -191,9 +191,9 @@
 }
 
 /* Nested files without an icon compensate only for the missing icon column so their
-   names read as tree-children. Direct (depth 0) files sit flush — no compensation. */
+   names read as tree-children. Slightly tighter gap than the icon+row-gap sum. */
 .ft-row--file.ft-row--nested:not(:has(.ft-icon)) .ft-file-body {
-    padding-left: calc(16px + 8px + 2px);
+    padding-left: 18px;
 }
 
 .ft-row--file:not(.ft-row--nested):not(:has(.ft-icon)) .ft-file-body {
@@ -270,12 +270,13 @@
 
 /* ---------- Row hover actions ---------- */
 /* Absolute so the icons overlay on top of the row's trailing edge without affecting the
-   row's height or pushing other content around. No background — sits transparently over text. */
+   row's height or pushing other content around. Aligned to the card's title line (top
+   of the body) so they line up with the filename on multi-row file cards — not
+   vertically centered over the whole card. */
 .ft-row-actions {
     position: absolute;
-    top: 50%;
+    top: 8px;
     right: 6px;
-    transform: translateY(-50%);
     align-items: center;
     gap: 2px;
     display: none;
@@ -312,12 +313,12 @@
 }
 
 /* ---------- Persistent star (right side, files only) ---------- */
-/* Absolutely positioned so toggling "starred" doesn't reflow row height or push content. */
+/* Absolutely positioned so toggling "starred" doesn't reflow row height or push content.
+   Aligned to the title line, matching the hover action icons. */
 .ft-star {
     position: absolute;
-    top: 50%;
+    top: 10px;
     right: 8px;
-    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
