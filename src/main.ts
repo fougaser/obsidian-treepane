@@ -17,10 +17,32 @@ interface FileTreeData {
     defaultRoot: string;
     defaultFiletreeView: boolean;
     folderIcons: Record<string, string>;
+    folderColors: Record<string, string>;
     seededFolderIcons: boolean;
+    seededSecondLevel: boolean;
+    pinnedPaths: string[];
+    starredFiles: string[];
     sortMode: SortMode;
     appearance: FileTreeAppearance;
 }
+
+/**
+ * Fixed pastel palette offered in the icon picker. Users can also type any custom color.
+ */
+export const PASTEL_PALETTE: readonly string[] = Object.freeze([
+    '#F8C8DC', // pink
+    '#FFC6FF', // rose
+    '#FFADAD', // coral
+    '#FFD6A5', // peach
+    '#FDFFB6', // lemon
+    '#CAFFBF', // mint
+    '#9BF6FF', // sky
+    '#A0C4FF', // blue
+    '#BDB2FF', // lavender
+    '#C1B2FF', // periwinkle
+    '#B5EAD7', // sage
+    '#FFB7B2'  // apricot
+]);
 
 const DEFAULT_APPEARANCE: FileTreeAppearance = {
     showTitle: true,
@@ -41,13 +63,54 @@ const SEEDED_FOLDER_ICONS: Record<string, string> = {
     'Личное': 'heart'
 };
 
+// Second-level seed — user-specific (Scriptorium vault). Safe to leave in: these seeds only
+// apply if the exact path exists in the vault, otherwise they are skipped.
+interface SecondLevelSeed {
+    icon: string;
+    color: string;
+}
+
+const SEEDED_SECOND_LEVEL: Record<string, SecondLevelSeed> = {
+    // Сеть
+    'Сеть/Команда': { icon: 'users-round', color: '#A0C4FF' },
+    'Сеть/Партнёры': { icon: 'handshake', color: '#BDB2FF' },
+    'Сеть/Клиенты': { icon: 'user-check', color: '#B5EAD7' },
+    'Сеть/Наставники': { icon: 'graduation-cap', color: '#FFD6A5' },
+    'Сеть/Лиды': { icon: 'zap', color: '#FDFFB6' },
+    'Сеть/Сообщество': { icon: 'globe', color: '#9BF6FF' },
+    'Сеть/Организации': { icon: 'building-2', color: '#FFC6FF' },
+
+    // Знания
+    'Знания/Дизайн': { icon: 'palette', color: '#FFC6FF' },
+    'Знания/Разработка': { icon: 'code', color: '#A0C4FF' },
+    'Знания/Продуктивность': { icon: 'timer', color: '#CAFFBF' },
+    'Знания/Промпты': { icon: 'message-square', color: '#BDB2FF' },
+
+    // Личное
+    'Личное/Гитара': { icon: 'music', color: '#FFD6A5' },
+    'Личное/Психология': { icon: 'brain', color: '#FFC6FF' },
+    'Личное/Покупки': { icon: 'shopping-cart', color: '#B5EAD7' },
+
+    // Звонки
+    'Звонки/Транскрипты': { icon: 'mic', color: '#FFADAD' },
+    'Звонки/Обработанные': { icon: 'sparkles', color: '#FDFFB6' },
+
+    // Финансы
+    'Финансы/Платежи': { icon: 'receipt', color: '#CAFFBF' },
+    'Финансы/Расходы': { icon: 'minus-circle', color: '#FFADAD' }
+};
+
 const DEFAULT_DATA: FileTreeData = {
     expanded: [],
     viewRoot: '/',
     defaultRoot: '/',
     defaultFiletreeView: true,
     folderIcons: {},
+    folderColors: {},
     seededFolderIcons: false,
+    seededSecondLevel: false,
+    pinnedPaths: [],
+    starredFiles: [],
     sortMode: 'folders-first',
     appearance: DEFAULT_APPEARANCE
 };
@@ -70,7 +133,11 @@ export default class FileTreePlugin extends Plugin {
             defaultRoot: typeof stored?.defaultRoot === 'string' ? stored!.defaultRoot! : '/',
             defaultFiletreeView: typeof stored?.defaultFiletreeView === 'boolean' ? stored!.defaultFiletreeView! : true,
             folderIcons: this.sanitizeFolderIcons(stored?.folderIcons),
+            folderColors: this.sanitizeFolderIcons(stored?.folderColors),
             seededFolderIcons: stored?.seededFolderIcons === true,
+            seededSecondLevel: stored?.seededSecondLevel === true,
+            pinnedPaths: Array.isArray(stored?.pinnedPaths) ? stored!.pinnedPaths!.filter(p => typeof p === 'string') : [],
+            starredFiles: Array.isArray(stored?.starredFiles) ? stored!.starredFiles!.filter(p => typeof p === 'string') : [],
             sortMode: normalizeSortMode(stored?.sortMode),
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
@@ -85,6 +152,23 @@ export default class FileTreePlugin extends Plugin {
                 }
             }
             this.data = { ...this.data, folderIcons: merged, seededFolderIcons: true };
+            await this.saveData(this.data);
+        }
+
+        // Seed second-level folder icons + colors for user's vault. Only applies to exact paths
+        // that actually exist in the vault — stray seeds are harmless.
+        if (!this.data.seededSecondLevel) {
+            const icons = { ...this.data.folderIcons };
+            const colors = { ...this.data.folderColors };
+            for (const [path, seed] of Object.entries(SEEDED_SECOND_LEVEL)) {
+                if (icons[path] === undefined) {
+                    icons[path] = seed.icon;
+                }
+                if (colors[path] === undefined) {
+                    colors[path] = seed.color;
+                }
+            }
+            this.data = { ...this.data, folderIcons: icons, folderColors: colors, seededSecondLevel: true };
             await this.saveData(this.data);
         }
 
@@ -204,6 +288,83 @@ export default class FileTreePlugin extends Plugin {
         }
         this.data = { ...this.data, folderIcons: next };
         await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    getFolderColor(path: string): string | null {
+        const color = this.data.folderColors[path];
+        return typeof color === 'string' && color.length > 0 ? color : null;
+    }
+
+    async setFolderColor(path: string, color: string | null): Promise<void> {
+        const next = { ...this.data.folderColors };
+        if (color && color.length > 0) {
+            next[path] = color;
+        } else {
+            delete next[path];
+        }
+        this.data = { ...this.data, folderColors: next };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    getPinnedPaths(): string[] {
+        return this.data.pinnedPaths;
+    }
+
+    isPinned(path: string): boolean {
+        return this.data.pinnedPaths.includes(path);
+    }
+
+    async togglePin(path: string): Promise<void> {
+        const list = this.data.pinnedPaths.filter(p => p !== path);
+        if (list.length === this.data.pinnedPaths.length) {
+            list.push(path); // wasn't pinned — append
+        }
+        this.data = { ...this.data, pinnedPaths: list };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    async movePinnedPath(path: string, direction: 'up' | 'down'): Promise<void> {
+        const list = [...this.data.pinnedPaths];
+        const idx = list.indexOf(path);
+        if (idx < 0) {
+            return;
+        }
+        const swap = direction === 'up' ? idx - 1 : idx + 1;
+        if (swap < 0 || swap >= list.length) {
+            return;
+        }
+        const tmp = list[idx];
+        list[idx] = list[swap];
+        list[swap] = tmp;
+        this.data = { ...this.data, pinnedPaths: list };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    async reorderPinnedPaths(next: string[]): Promise<void> {
+        this.data = { ...this.data, pinnedPaths: next };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    isStarred(path: string): boolean {
+        return this.data.starredFiles.includes(path);
+    }
+
+    async toggleStar(path: string): Promise<void> {
+        const list = this.data.starredFiles.filter(p => p !== path);
+        if (list.length === this.data.starredFiles.length) {
+            list.push(path);
+        }
+        this.data = { ...this.data, starredFiles: list };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    private notifyViews(): void {
         this.app.workspace.getLeavesOfType(FILE_TREE_VIEW_TYPE).forEach(leaf => {
             const view = leaf.view;
             if (view instanceof FileTreeView) {

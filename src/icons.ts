@@ -111,6 +111,11 @@ const EXTENSION_ICON: Record<string, string> = {
     mobi: 'book'
 };
 
-export function iconForFile(file: TFile): string {
-    return EXTENSION_ICON[file.extension.toLowerCase()] ?? 'file';
+/**
+ * Returns a Lucide icon id for known extensions, or null for unknown ones.
+ * Unknown-extension files intentionally render without an icon so the extension
+ * stays visible as the type hint in the filename.
+ */
+export function iconForFile(file: TFile): string | null {
+    return EXTENSION_ICON[file.extension.toLowerCase()] ?? null;
 }

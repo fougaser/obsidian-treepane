@@ -338,6 +338,24 @@ export class FileTreeView extends ItemView {
 
         const viewRoot = this.getViewRoot();
         this.updateHeader(viewRoot);
+
+        // Pinned section — always above the main tree when there are pins.
+        const pinnedPaths = this.plugin.getPinnedPaths();
+        const resolvedPins = pinnedPaths
+            .map(p => this.app.vault.getAbstractFileByPath(p))
+            .filter((f): f is TAbstractFile => f !== null);
+        if (resolvedPins.length > 0) {
+            const section = this.scroller.createDiv({ cls: 'ft-pinned-section' });
+            section.createDiv({ cls: 'ft-pinned-label', text: 'Pinned' });
+            resolvedPins.forEach(target => {
+                if (target instanceof TFolder) {
+                    this.renderFolderRow(target, 0, { pinned: true });
+                } else if (target instanceof TFile) {
+                    this.renderFileRow(target, 0, { pinned: true });
+                }
+            });
+        }
+
         this.renderFolderChildren(viewRoot, 0);
 
         this.scroller.scrollTop = previousScroll;
@@ -405,11 +423,17 @@ export class FileTreeView extends ItemView {
         files.forEach(emitFile);
     }
 
-    private renderFolderRow(folder: TFolder, depth: number): void {
+    private renderFolderRow(folder: TFolder, depth: number, options: { pinned?: boolean } = {}): void {
         const row = this.scroller.createDiv({ cls: 'ft-row ft-row--folder' });
         const isExpanded = this.expanded.has(folder.path);
         if (isExpanded) {
             row.addClass('is-expanded');
+        }
+        if (depth > 0) {
+            row.addClass('ft-row--nested');
+        }
+        if (options.pinned) {
+            row.addClass('ft-row--pinned');
         }
         row.dataset.path = folder.path;
         row.dataset.dragPath = folder.path;
@@ -431,6 +455,10 @@ export class FileTreeView extends ItemView {
         } else {
             setIcon(icon, isExpanded ? 'folder-open' : 'folder');
         }
+        const folderColor = this.plugin.getFolderColor(folder.path);
+        if (folderColor) {
+            icon.style.color = folderColor;
+        }
 
         row.createSpan({ cls: 'ft-name', text: folder.name || this.app.vault.getName() });
 
@@ -439,14 +467,23 @@ export class FileTreeView extends ItemView {
             row.createSpan({ cls: 'ft-count', text: String(totalChildren) });
         }
 
+        this.appendHoverActions(row, folder.path, { starable: false, inPinnedSection: Boolean(options.pinned) });
+
         this.rowByPath.set(folder.path, row);
     }
 
-    private renderFileRow(file: TFile, depth: number): void {
-        const isMarkdown = file.extension.toLowerCase() === 'md';
+    private renderFileRow(file: TFile, depth: number, options: { pinned?: boolean } = {}): void {
+        const ext = file.extension.toLowerCase();
+        const isMarkdown = ext === 'md';
         const row = this.scroller.createDiv({ cls: `ft-row ft-row--file ${isMarkdown ? 'ft-row--md' : ''}` });
         if (file.path === this.activePath) {
             row.addClass('is-active');
+        }
+        if (depth > 0) {
+            row.addClass('ft-row--nested');
+        }
+        if (options.pinned) {
+            row.addClass('ft-row--pinned');
         }
         row.dataset.path = file.path;
         row.dataset.dragPath = file.path;
@@ -456,10 +493,14 @@ export class FileTreeView extends ItemView {
         row.style.setProperty('--ft-depth', String(depth));
         row.setAttr('draggable', 'true');
 
-        // Markdown rows: no file-type icon, show basename (no `.md`).
+        // Non-md files: show icon only if the extension is known. Unknown extensions render no
+        // icon — the extension shown inside the filename is the type hint.
         if (!isMarkdown) {
-            const icon = row.createSpan({ cls: 'ft-icon' });
-            setIcon(icon, iconForFile(file));
+            const iconId = iconForFile(file);
+            if (iconId) {
+                const icon = row.createSpan({ cls: 'ft-icon' });
+                setIcon(icon, iconId);
+            }
         }
 
         const body = row.createDiv({ cls: 'ft-file-body' });
@@ -482,7 +523,75 @@ export class FileTreeView extends ItemView {
 
         body.createSpan({ cls: 'ft-date', text: formatDate(file.stat.mtime) });
 
+        // Persistent star indicator (right side) — yellow when starred.
+        if (this.plugin.isStarred(file.path)) {
+            const star = row.createSpan({ cls: 'ft-star is-on' });
+            setIcon(star, 'star');
+        }
+
+        this.appendHoverActions(row, file.path, { starable: true, inPinnedSection: Boolean(options.pinned) });
+
         this.rowByPath.set(file.path, row);
+    }
+
+    /** Pin/star icons that appear on hover (or reorder arrows if the row lives in the pinned section). */
+    private appendHoverActions(row: HTMLElement, path: string, opts: { starable: boolean; inPinnedSection: boolean }): void {
+        const actions = row.createDiv({ cls: 'ft-row-actions' });
+        if (opts.inPinnedSection) {
+            const up = actions.createSpan({ cls: 'ft-row-action' });
+            up.setAttr('aria-label', 'Move up');
+            up.title = 'Move up';
+            setIcon(up, 'chevron-up');
+            up.addEventListener('click', evt => {
+                evt.stopPropagation();
+                void this.plugin.movePinnedPath(path, 'up');
+            });
+            const down = actions.createSpan({ cls: 'ft-row-action' });
+            down.setAttr('aria-label', 'Move down');
+            down.title = 'Move down';
+            setIcon(down, 'chevron-down');
+            down.addEventListener('click', evt => {
+                evt.stopPropagation();
+                void this.plugin.movePinnedPath(path, 'down');
+            });
+            const unpin = actions.createSpan({ cls: 'ft-row-action' });
+            unpin.setAttr('aria-label', 'Unpin');
+            unpin.title = 'Unpin';
+            setIcon(unpin, 'pin-off');
+            unpin.addEventListener('click', evt => {
+                evt.stopPropagation();
+                void this.plugin.togglePin(path);
+            });
+            return;
+        }
+
+        const pin = actions.createSpan({ cls: 'ft-row-action ft-row-action--pin' });
+        const pinned = this.plugin.isPinned(path);
+        pin.setAttr('aria-label', pinned ? 'Unpin' : 'Pin');
+        pin.title = pinned ? 'Unpin' : 'Pin';
+        setIcon(pin, pinned ? 'pin-off' : 'pin');
+        if (pinned) {
+            pin.addClass('is-on');
+        }
+        pin.addEventListener('click', evt => {
+            evt.stopPropagation();
+            void this.plugin.togglePin(path);
+        });
+
+        if (opts.starable) {
+            const star = actions.createSpan({ cls: 'ft-row-action ft-row-action--star' });
+            const starred = this.plugin.isStarred(path);
+            star.setAttr('aria-label', starred ? 'Unstar' : 'Star');
+            star.title = starred ? 'Unstar' : 'Star';
+            setIcon(star, starred ? 'star' : 'star');
+            if (starred) {
+                star.addClass('is-on');
+            }
+            star.addEventListener('click', evt => {
+                evt.stopPropagation();
+                void this.plugin.toggleStar(path);
+            });
+        }
     }
 
     private queuePreviewLoad(file: TFile): void {
@@ -605,8 +714,10 @@ export class FileTreeView extends ItemView {
         if (onIcon) {
             new IconPickerModal(this.app, {
                 currentIconId: this.plugin.getFolderIcon(target.path),
-                onPick: iconId => {
+                currentColor: this.plugin.getFolderColor(target.path),
+                onPick: (iconId, color) => {
                     void this.plugin.setFolderIcon(target.path, iconId);
+                    void this.plugin.setFolderColor(target.path, color);
                 }
             }).open();
             return;

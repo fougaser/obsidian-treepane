@@ -49,6 +49,30 @@ export function openContextMenu(
         );
     }
 
+    if (target && target !== app.vault.getRoot()) {
+        menu.addSeparator();
+        const isPinned = plugin.isPinned(target.path);
+        menu.addItem(item =>
+            item
+                .setTitle(isPinned ? 'Unpin' : 'Pin to top')
+                .setIcon(isPinned ? 'pin-off' : 'pin')
+                .onClick(() => {
+                    void plugin.togglePin(target.path);
+                })
+        );
+        if (target instanceof TFile) {
+            const isStarred = plugin.isStarred(target.path);
+            menu.addItem(item =>
+                item
+                    .setTitle(isStarred ? 'Remove star' : 'Star')
+                    .setIcon('star')
+                    .onClick(() => {
+                        void plugin.toggleStar(target.path);
+                    })
+            );
+        }
+    }
+
     if (target instanceof TFolder && target !== app.vault.getRoot()) {
         menu.addSeparator();
         menu.addItem(item =>

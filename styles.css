@@ -73,6 +73,7 @@
 /* ---------- Row ---------- */
 /* Rows span the full sidebar width. No margin, no rounded corners — classic flat explorer look. */
 .ft-row {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -81,6 +82,20 @@
     user-select: none;
     color: var(--text-normal);
     box-sizing: border-box;
+}
+
+/* Vertical guide line under the ancestor folder's chevron. Drawn at the chevron x-column of
+   the parent folder (depth - 1). Appears only on nested rows. */
+.ft-row--nested::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc((var(--ft-depth, 0) - 1) * 16px + 17px);
+    width: 1px;
+    background-color: var(--background-modifier-border);
+    pointer-events: none;
+    opacity: 0.7;
 }
 
 .ft-row.is-drop-target {
@@ -201,6 +216,91 @@
     font-size: var(--font-ui-smaller, 11px);
     font-variant-numeric: tabular-nums;
     margin-left: auto;
+}
+
+/* ---------- Pinned section ---------- */
+.ft-pinned-section {
+    border-bottom: 1px solid var(--background-modifier-border);
+    padding-bottom: 4px;
+    margin-bottom: 4px;
+}
+
+.ft-pinned-label {
+    padding: 4px 12px;
+    font-size: var(--font-ui-smaller, 11px);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+}
+
+/* Pinned rows are always depth 0 regardless of real nesting — no guide line. */
+.ft-pinned-section .ft-row::before {
+    display: none;
+}
+
+/* ---------- Row hover actions ---------- */
+.ft-row-actions {
+    display: none;
+    align-items: center;
+    gap: 2px;
+    margin-left: 4px;
+}
+
+.ft-row:hover .ft-row-actions,
+.ft-row--pinned .ft-row-actions {
+    display: inline-flex;
+}
+
+.ft-row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    border-radius: 3px;
+    color: var(--text-muted);
+    cursor: pointer;
+}
+
+.ft-row-action:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-normal);
+}
+
+.ft-row-action svg {
+    width: 14px;
+    height: 14px;
+}
+
+.ft-row-action.is-on {
+    color: var(--text-accent);
+}
+
+/* ---------- Persistent star (right side, files only) ---------- */
+.ft-star {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    margin-left: 4px;
+    color: #f1b24a;
+    flex: 0 0 auto;
+}
+
+.ft-star svg {
+    width: 14px;
+    height: 14px;
+    fill: currentColor;
+}
+
+/* Star hover action shows yellow when already starred */
+.ft-row-action--star.is-on {
+    color: #f1b24a;
+}
+
+.ft-row-action--star.is-on svg {
+    fill: currentColor;
 }
 
 /* ---------- Active (selected) note ---------- */
