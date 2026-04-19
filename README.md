@@ -15,6 +15,8 @@
 
 ---
 
+![Obsidian Treepane in the left sidebar](./docs/image.jpg)
+
 ## Why another explorer?
 
 Obsidian's built‑in file explorer is fine but minimal. The popular community alternative — Notebook Navigator — is powerful but dual‑pane and opinionated in ways that don't suit every workflow. **Obsidian Treepane** is what's left when you strip back to first principles:
