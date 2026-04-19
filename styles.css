@@ -247,11 +247,24 @@
 }
 
 /* ---------- Row hover actions ---------- */
+/* Absolute so the icons overlay on top of the row's trailing edge without affecting the
+   row's height or pushing other content around. */
 .ft-row-actions {
-    display: none;
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
     align-items: center;
     gap: 2px;
-    margin-left: 4px;
+    display: none;
+    background: linear-gradient(
+        to right,
+        transparent 0,
+        var(--background-primary) 14px,
+        var(--background-primary) 100%
+    );
+    padding-left: 14px;
+    pointer-events: auto;
 }
 
 .ft-row:hover .ft-row-actions,
@@ -285,21 +298,30 @@
 }
 
 /* ---------- Persistent star (right side, files only) ---------- */
+/* Absolutely positioned so toggling "starred" doesn't reflow row height or push content. */
 .ft-star {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 16px;
     height: 16px;
-    margin-left: 4px;
     color: #f1b24a;
-    flex: 0 0 auto;
+    pointer-events: none;
 }
 
 .ft-star svg {
     width: 14px;
     height: 14px;
     fill: currentColor;
+}
+
+/* When the row is hovered and actions show, hide the static star (actions will include it). */
+.ft-row:hover .ft-star {
+    display: none;
 }
 
 /* Star hover action shows yellow when already starred */
