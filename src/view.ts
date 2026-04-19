@@ -353,9 +353,6 @@ export class FileTreeView extends ItemView {
                 this.renderFolderRow(sub, depth);
                 if (this.expanded.has(sub.path)) {
                     this.renderFolderChildren(sub, depth + 1);
-                    if (depth === 0) {
-                        this.scroller.createDiv({ cls: 'ft-group-spacer' });
-                    }
                 }
             });
         };

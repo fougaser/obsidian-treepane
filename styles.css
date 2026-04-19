@@ -69,10 +69,6 @@
     padding: 0 0 20px;
 }
 
-.ft-group-spacer {
-    height: 12px;
-    pointer-events: none;
-}
 
 /* ---------- Row ---------- */
 /* Rows span the full sidebar width. No margin, no rounded corners — classic flat explorer look. */
