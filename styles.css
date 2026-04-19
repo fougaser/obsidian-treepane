@@ -234,7 +234,7 @@
 }
 
 .ft-pinned-label {
-    padding: 4px 12px;
+    padding: 10px 12px 4px;
     font-size: var(--font-ui-smaller, 11px);
     text-transform: uppercase;
     letter-spacing: 0.06em;

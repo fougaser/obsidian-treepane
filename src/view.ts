@@ -349,9 +349,9 @@ export class FileTreeView extends ItemView {
             section.createDiv({ cls: 'ft-pinned-label', text: 'Pinned' });
             resolvedPins.forEach(target => {
                 if (target instanceof TFolder) {
-                    this.renderFolderRow(target, 0, { pinned: true });
+                    this.renderFolderRow(target, 0, { pinned: true, parent: section });
                 } else if (target instanceof TFile) {
-                    this.renderFileRow(target, 0, { pinned: true });
+                    this.renderFileRow(target, 0, { pinned: true, parent: section });
                 }
             });
         }
@@ -423,8 +423,9 @@ export class FileTreeView extends ItemView {
         files.forEach(emitFile);
     }
 
-    private renderFolderRow(folder: TFolder, depth: number, options: { pinned?: boolean } = {}): void {
-        const row = this.scroller.createDiv({ cls: 'ft-row ft-row--folder' });
+    private renderFolderRow(folder: TFolder, depth: number, options: { pinned?: boolean; parent?: HTMLElement } = {}): void {
+        const host = options.parent ?? this.scroller;
+        const row = host.createDiv({ cls: 'ft-row ft-row--folder' });
         const isExpanded = this.expanded.has(folder.path);
         if (isExpanded) {
             row.addClass('is-expanded');
@@ -472,10 +473,11 @@ export class FileTreeView extends ItemView {
         this.rowByPath.set(folder.path, row);
     }
 
-    private renderFileRow(file: TFile, depth: number, options: { pinned?: boolean } = {}): void {
+    private renderFileRow(file: TFile, depth: number, options: { pinned?: boolean; parent?: HTMLElement } = {}): void {
+        const host = options.parent ?? this.scroller;
         const ext = file.extension.toLowerCase();
         const isMarkdown = ext === 'md';
-        const row = this.scroller.createDiv({ cls: `ft-row ft-row--file ${isMarkdown ? 'ft-row--md' : ''}` });
+        const row = host.createDiv({ cls: `ft-row ft-row--file ${isMarkdown ? 'ft-row--md' : ''}` });
         if (file.path === this.activePath) {
             row.addClass('is-active');
         }
