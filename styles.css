@@ -278,8 +278,7 @@
     pointer-events: auto;
 }
 
-.ft-row:hover .ft-row-actions,
-.ft-row--pinned .ft-row-actions {
+.ft-row:hover .ft-row-actions {
     display: inline-flex;
 }
 
@@ -335,9 +334,8 @@
     display: none;
 }
 
-/* Count yields its space to the pin/star actions on hover. Pinned rows are always hovered-like. */
-.ft-row:hover .ft-count,
-.ft-row--pinned .ft-count {
+/* Count yields its space to the pin/star actions on hover. */
+.ft-row:hover .ft-count {
     visibility: hidden;
 }
 
