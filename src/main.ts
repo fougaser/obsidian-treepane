@@ -20,6 +20,8 @@ interface FileTreeData {
     folderColors: Record<string, string>;
     seededFolderIcons: boolean;
     seededSecondLevel: boolean;
+    /** One-time migration flag — true after non-root folder colors were wiped. */
+    clearedNonRootColors: boolean;
     pinnedPaths: string[];
     starredFiles: string[];
     sortMode: SortMode;
@@ -105,6 +107,7 @@ const DEFAULT_DATA: FileTreeData = {
     folderColors: {},
     seededFolderIcons: false,
     seededSecondLevel: false,
+    clearedNonRootColors: false,
     pinnedPaths: [],
     starredFiles: [],
     sortMode: 'folders-first',
@@ -132,6 +135,7 @@ export default class FileTreePlugin extends Plugin {
             folderColors: this.sanitizeFolderIcons(stored?.folderColors),
             seededFolderIcons: stored?.seededFolderIcons === true,
             seededSecondLevel: stored?.seededSecondLevel === true,
+            clearedNonRootColors: stored?.clearedNonRootColors === true,
             pinnedPaths: Array.isArray(stored?.pinnedPaths) ? stored!.pinnedPaths!.filter(p => typeof p === 'string') : [],
             starredFiles: Array.isArray(stored?.starredFiles) ? stored!.starredFiles!.filter(p => typeof p === 'string') : [],
             sortMode: normalizeSortMode(stored?.sortMode),
@@ -166,14 +170,14 @@ export default class FileTreePlugin extends Plugin {
         }
 
         // One-time migration: drop any folderColors on non-root folders (paths containing '/').
-        // Personal preference — only root folders carry a color; deeper folders fall back to
-        // the default icon tint. The migration flag lives under the seededSecondLevel key since
-        // colors-beyond-root were only ever seeded by the earlier second-level seeding pass.
-        const nonRootColorEntries = Object.keys(this.data.folderColors).filter(p => p.includes('/'));
-        if (nonRootColorEntries.length > 0) {
+        // Personal preference — earlier builds seeded colors for second-level folders; this
+        // clears them. Guarded by a flag so future manual non-root colors survive reloads.
+        if (!this.data.clearedNonRootColors) {
             const colors = { ...this.data.folderColors };
-            nonRootColorEntries.forEach(p => delete colors[p]);
-            this.data = { ...this.data, folderColors: colors };
+            Object.keys(colors)
+                .filter(p => p.includes('/'))
+                .forEach(p => delete colors[p]);
+            this.data = { ...this.data, folderColors: colors, clearedNonRootColors: true };
             await this.saveData(this.data);
         }
 
