@@ -385,7 +385,13 @@ export class FileTreeView extends ItemView {
         setIcon(chevron, 'chevron-right');
 
         const icon = row.createSpan({ cls: 'ft-icon' });
-        setIcon(icon, isExpanded ? 'folder-open' : 'folder');
+        const customIcon = this.plugin.getFolderIcon(folder.path);
+        if (customIcon) {
+            setIcon(icon, customIcon);
+            row.addClass('ft-row--custom-icon');
+        } else {
+            setIcon(icon, isExpanded ? 'folder-open' : 'folder');
+        }
 
         row.createSpan({ cls: 'ft-name', text: folder.name || this.app.vault.getName() });
 
@@ -520,7 +526,12 @@ export class FileTreeView extends ItemView {
         }
 
         if (target instanceof TFile) {
-            void this.app.workspace.getLeaf(false).openFile(target, { active: true });
+            // getLeaf(false) returns the *currently active* leaf — which is us when the user
+            // just clicked inside the sidebar, so opening would replace the tree with the file.
+            // Prefer the most recent main-area leaf; fall back to a fresh tab if none exists.
+            const recent = this.app.workspace.getMostRecentLeaf();
+            const leaf = recent ?? this.app.workspace.getLeaf('tab');
+            void leaf.openFile(target, { active: true });
         }
     }
 
@@ -534,7 +545,7 @@ export class FileTreeView extends ItemView {
                 target = this.app.vault.getAbstractFileByPath(path);
             }
         }
-        openContextMenu(this.app, target, evt);
+        openContextMenu(this.app, this.plugin, target, evt);
     }
 
     private toggleFolder(path: string): void {

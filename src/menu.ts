@@ -1,6 +1,12 @@
 import { App, FileSystemAdapter, Menu, Modal, Notice, Setting, TAbstractFile, TFile, TFolder } from 'obsidian';
+import type FileTreePlugin from './main';
 
-export function openContextMenu(app: App, target: TAbstractFile | null, evt: MouseEvent): void {
+export function openContextMenu(
+    app: App,
+    plugin: FileTreePlugin,
+    target: TAbstractFile | null,
+    evt: MouseEvent
+): void {
     const menu = new Menu();
 
     const folderForNew: TFolder | null = target instanceof TFolder
@@ -41,6 +47,38 @@ export function openContextMenu(app: App, target: TAbstractFile | null, evt: Mou
                     });
                 })
         );
+    }
+
+    if (target instanceof TFolder && target !== app.vault.getRoot()) {
+        menu.addSeparator();
+        menu.addItem(item =>
+            item
+                .setTitle('Change icon')
+                .setIcon('image')
+                .onClick(() => {
+                    const currentIcon = plugin.getFolderIcon(target.path) ?? '';
+                    openPromptModal(app, {
+                        title: 'Folder icon',
+                        placeholder: 'Lucide icon name (e.g. briefcase, users, target)',
+                        initial: currentIcon,
+                        submitLabel: 'Set',
+                        onSubmit: async value => {
+                            const trimmed = value.trim();
+                            await plugin.setFolderIcon(target.path, trimmed || null);
+                        }
+                    });
+                })
+        );
+        if (plugin.getFolderIcon(target.path)) {
+            menu.addItem(item =>
+                item
+                    .setTitle('Reset icon')
+                    .setIcon('rotate-ccw')
+                    .onClick(() => {
+                        void plugin.setFolderIcon(target.path, null);
+                    })
+            );
+        }
     }
 
     if (target && !(target === app.vault.getRoot())) {

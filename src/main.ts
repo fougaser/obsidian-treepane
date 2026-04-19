@@ -14,6 +14,8 @@ interface FileTreeData {
     viewRoot: string;
     defaultRoot: string;
     defaultFiletreeView: boolean;
+    folderIcons: Record<string, string>;
+    seededFolderIcons: boolean;
     appearance: FileTreeAppearance;
 }
 
@@ -24,11 +26,25 @@ const DEFAULT_APPEARANCE: FileTreeAppearance = {
     previewRows: 2
 };
 
+// First-run seed — if these top-level folders exist in the vault they get meaningful icons.
+// Users can override any of them through the "Change icon" action on a folder row.
+const SEEDED_FOLDER_ICONS: Record<string, string> = {
+    'Проекты': 'briefcase',
+    'Сеть': 'users',
+    'Звонки': 'phone',
+    'Цели': 'target',
+    'Финансы': 'wallet',
+    'Знания': 'book-open',
+    'Личное': 'heart'
+};
+
 const DEFAULT_DATA: FileTreeData = {
     expanded: [],
     viewRoot: '/',
     defaultRoot: '/',
     defaultFiletreeView: true,
+    folderIcons: {},
+    seededFolderIcons: false,
     appearance: DEFAULT_APPEARANCE
 };
 
@@ -42,8 +58,23 @@ export default class FileTreePlugin extends Plugin {
             viewRoot: typeof stored?.viewRoot === 'string' ? stored!.viewRoot! : '/',
             defaultRoot: typeof stored?.defaultRoot === 'string' ? stored!.defaultRoot! : '/',
             defaultFiletreeView: typeof stored?.defaultFiletreeView === 'boolean' ? stored!.defaultFiletreeView! : true,
+            folderIcons: this.sanitizeFolderIcons(stored?.folderIcons),
+            seededFolderIcons: stored?.seededFolderIcons === true,
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
+
+        // Seed folder icons for known top-level folders on first install only. Keyed by a
+        // separate flag so user-cleared icons are not re-added on every load.
+        if (!this.data.seededFolderIcons) {
+            const merged = { ...this.data.folderIcons };
+            for (const [path, icon] of Object.entries(SEEDED_FOLDER_ICONS)) {
+                if (merged[path] === undefined) {
+                    merged[path] = icon;
+                }
+            }
+            this.data = { ...this.data, folderIcons: merged, seededFolderIcons: true };
+            await this.saveData(this.data);
+        }
 
         this.registerView(FILE_TREE_VIEW_TYPE, leaf => new FileTreeView(leaf, this));
         this.addSettingTab(new FileTreeSettingTab(this.app, this));
@@ -127,6 +158,41 @@ export default class FileTreePlugin extends Plugin {
     async persistViewRoot(path: string): Promise<void> {
         this.data = { ...this.data, viewRoot: path };
         await this.saveData(this.data);
+    }
+
+    getFolderIcon(path: string): string | null {
+        const icon = this.data.folderIcons[path];
+        return typeof icon === 'string' && icon.length > 0 ? icon : null;
+    }
+
+    async setFolderIcon(path: string, icon: string | null): Promise<void> {
+        const next = { ...this.data.folderIcons };
+        if (icon && icon.length > 0) {
+            next[path] = icon;
+        } else {
+            delete next[path];
+        }
+        this.data = { ...this.data, folderIcons: next };
+        await this.saveData(this.data);
+        this.app.workspace.getLeavesOfType(FILE_TREE_VIEW_TYPE).forEach(leaf => {
+            const view = leaf.view;
+            if (view instanceof FileTreeView) {
+                view.onAppearanceChanged();
+            }
+        });
+    }
+
+    private sanitizeFolderIcons(raw: unknown): Record<string, string> {
+        if (!raw || typeof raw !== 'object') {
+            return {};
+        }
+        const out: Record<string, string> = {};
+        for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+            if (typeof key === 'string' && typeof value === 'string' && value.length > 0) {
+                out[key] = value;
+            }
+        }
+        return out;
     }
 
     async persistAppearance(next: FileTreeAppearance): Promise<void> {
