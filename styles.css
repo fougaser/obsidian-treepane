@@ -190,10 +190,11 @@
     padding-left: 2px;
 }
 
-/* File rows without an icon (unknown extension) still need the same visual left-alignment
-   as iconed rows, so the file body compensates with extra padding. */
+/* Files without an icon (md notes + unknown-ext files) compensate for the missing chevron
+   AND missing icon so their names line up with sibling folder names in the same column. */
 .ft-row--file:not(:has(.ft-icon)) .ft-file-body {
-    padding-left: calc(16px + 8px + 2px);
+    /* chevron(14) + gap(8) + icon(16) + gap(8) + base(2) */
+    padding-left: 48px;
 }
 
 .ft-preview {
