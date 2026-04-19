@@ -13,7 +13,7 @@ export class FileTreeSettingTab extends PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Obsidian Treepane' });
+        containerEl.createEl('h2', { text: 'Treepane' });
 
         // ---- Default filetree view ----
         new Setting(containerEl).setName('Default filetree view').setHeading();

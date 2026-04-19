@@ -74,7 +74,7 @@ export class FileTreeView extends ItemView {
     }
 
     getDisplayText(): string {
-        return 'Obsidian Treepane';
+        return 'Treepane';
     }
 
     getIcon(): string {

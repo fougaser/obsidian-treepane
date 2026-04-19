@@ -1,6 +1,6 @@
 {
   "id": "obsidian-treepane",
-  "name": "Obsidian Treepane",
+  "name": "Treepane",
   "version": "0.1.0",
   "minAppVersion": "1.5.0",
   "description": "Minimal single-pane file tree for Obsidian's left sidebar.",
