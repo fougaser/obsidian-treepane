@@ -190,11 +190,14 @@
     padding-left: 2px;
 }
 
-/* Files without an icon (md notes + unknown-ext files) compensate for the missing chevron
-   AND missing icon so their names line up with sibling folder names in the same column. */
-.ft-row--file:not(:has(.ft-icon)) .ft-file-body {
-    /* chevron(14) + gap(8) + icon(16) + gap(8) + base(2) */
-    padding-left: 48px;
+/* Nested files without an icon compensate only for the missing icon column so their
+   names read as tree-children. Direct (depth 0) files sit flush — no compensation. */
+.ft-row--file.ft-row--nested:not(:has(.ft-icon)) .ft-file-body {
+    padding-left: calc(16px + 8px + 2px);
+}
+
+.ft-row--file:not(.ft-row--nested):not(:has(.ft-icon)) .ft-file-body {
+    padding-left: 0;
 }
 
 .ft-preview {
