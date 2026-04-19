@@ -57,6 +57,7 @@ export class FileTreeView extends ItemView {
     private headerTitleEl!: HTMLElement;
     private headerBackEl!: HTMLElement;
     private expanded: Set<string> = new Set();
+    private expandedInPinned: Set<string> = new Set();
     private rowByPath: Map<string, HTMLElement> = new Map();
     private activePath: string | null = null;
     private pendingReveal: string | null = null;
@@ -72,6 +73,7 @@ export class FileTreeView extends ItemView {
         super(leaf);
         this.plugin = plugin;
         this.expanded = new Set(plugin.getPersistedExpanded());
+        this.expandedInPinned = new Set(plugin.getPersistedExpandedInPinned());
         this.viewRootPath = plugin.getPersistedViewRoot();
     }
 
@@ -149,6 +151,7 @@ export class FileTreeView extends ItemView {
             window.clearTimeout(this.saveHandle);
             this.saveHandle = 0;
             await this.plugin.persistExpanded([...this.expanded]);
+            await this.plugin.persistExpandedInPinned([...this.expandedInPinned]);
         }
     }
 
@@ -350,6 +353,11 @@ export class FileTreeView extends ItemView {
             resolvedPins.forEach(target => {
                 if (target instanceof TFolder) {
                     this.renderFolderRow(target, 0, { pinned: true, parent: section });
+                    // Pinned folders expand independently from the main tree — use a separate
+                    // state set and keep rendering into the same pinned-section host.
+                    if (this.expandedInPinned.has(target.path)) {
+                        this.renderFolderChildren(target, 1, 'pinned', section);
+                    }
                 } else if (target instanceof TFile) {
                     this.renderFileRow(target, 0, { pinned: true, parent: section });
                 }
@@ -378,7 +386,7 @@ export class FileTreeView extends ItemView {
         this.headerBackEl.toggleClass('is-hidden', viewPath === normalizedDefault);
     }
 
-    private renderFolderChildren(folder: TFolder, depth: number): void {
+    private renderFolderChildren(folder: TFolder, depth: number, ctx: 'main' | 'pinned' = 'main', host?: HTMLElement): void {
         const subfolders: TFolder[] = [];
         const files: TFile[] = [];
         folder.children.forEach(child => {
@@ -393,13 +401,14 @@ export class FileTreeView extends ItemView {
         subfolders.sort(byName);
         files.sort(byName);
 
+        const expandedSet = ctx === 'pinned' ? this.expandedInPinned : this.expanded;
         const emitFolder = (sub: TFolder) => {
-            this.renderFolderRow(sub, depth);
-            if (this.expanded.has(sub.path)) {
-                this.renderFolderChildren(sub, depth + 1);
+            this.renderFolderRow(sub, depth, { pinned: ctx === 'pinned', parent: host });
+            if (expandedSet.has(sub.path)) {
+                this.renderFolderChildren(sub, depth + 1, ctx, host);
             }
         };
-        const emitFile = (file: TFile) => this.renderFileRow(file, depth);
+        const emitFile = (file: TFile) => this.renderFileRow(file, depth, { pinned: ctx === 'pinned', parent: host });
 
         const sortMode = this.plugin.getSortMode();
         if (sortMode === 'alphabet') {
@@ -426,7 +435,8 @@ export class FileTreeView extends ItemView {
     private renderFolderRow(folder: TFolder, depth: number, options: { pinned?: boolean; parent?: HTMLElement } = {}): void {
         const host = options.parent ?? this.scroller;
         const row = host.createDiv({ cls: 'ft-row ft-row--folder' });
-        const isExpanded = this.expanded.has(folder.path);
+        const expandedSet = options.pinned ? this.expandedInPinned : this.expanded;
+        const isExpanded = expandedSet.has(folder.path);
         if (isExpanded) {
             row.addClass('is-expanded');
         }
@@ -435,6 +445,9 @@ export class FileTreeView extends ItemView {
         }
         if (options.pinned) {
             row.addClass('ft-row--pinned');
+            row.dataset.context = 'pinned';
+        } else {
+            row.dataset.context = 'main';
         }
         row.dataset.path = folder.path;
         row.dataset.dragPath = folder.path;
@@ -468,7 +481,13 @@ export class FileTreeView extends ItemView {
             row.createSpan({ cls: 'ft-count', text: String(totalChildren) });
         }
 
-        this.appendHoverActions(row, folder.path, { starable: false, inPinnedSection: Boolean(options.pinned) });
+        // Persistent star indicator for starred folders (right side).
+        if (this.plugin.isStarred(folder.path)) {
+            const star = row.createSpan({ cls: 'ft-star is-on' });
+            setIcon(star, 'star');
+        }
+
+        this.appendHoverActions(row, folder.path, { starable: true, inPinnedSection: Boolean(options.pinned) });
 
         this.rowByPath.set(folder.path, row);
     }
@@ -651,14 +670,15 @@ export class FileTreeView extends ItemView {
         }
 
         const chevronClick = (evt.target as Element).closest('[data-role="chevron"]') !== null;
+        const ctx: 'main' | 'pinned' = row.dataset.context === 'pinned' ? 'pinned' : 'main';
 
         if (target instanceof TFolder) {
             if (chevronClick) {
-                this.toggleFolder(target.path);
+                this.toggleFolder(target.path, ctx);
                 return;
             }
             // Single click on folder name: toggle (deferred so a dblclick can cancel).
-            this.schedulePendingFolderToggle(target.path);
+            this.schedulePendingFolderToggle(target.path, ctx);
             return;
         }
 
@@ -675,11 +695,11 @@ export class FileTreeView extends ItemView {
         }
     }
 
-    private schedulePendingFolderToggle(path: string): void {
+    private schedulePendingFolderToggle(path: string, ctx: 'main' | 'pinned' = 'main'): void {
         this.cancelPendingFolderClick();
         const timer = window.setTimeout(() => {
             this.pendingFolderClick = null;
-            this.toggleFolder(path);
+            this.toggleFolder(path, ctx);
         }, CLICK_DELAY_MS);
         this.pendingFolderClick = { path, timer };
     }
@@ -747,11 +767,12 @@ export class FileTreeView extends ItemView {
         openContextMenu(this.app, this.plugin, target, evt);
     }
 
-    private toggleFolder(path: string): void {
-        if (this.expanded.has(path)) {
-            this.expanded.delete(path);
+    private toggleFolder(path: string, ctx: 'main' | 'pinned' = 'main'): void {
+        const set = ctx === 'pinned' ? this.expandedInPinned : this.expanded;
+        if (set.has(path)) {
+            set.delete(path);
         } else {
-            this.expanded.add(path);
+            set.add(path);
         }
         this.queuePersist();
         this.scheduleRender();
@@ -764,18 +785,24 @@ export class FileTreeView extends ItemView {
         this.saveHandle = window.setTimeout(() => {
             this.saveHandle = 0;
             void this.plugin.persistExpanded([...this.expanded]);
+            void this.plugin.persistExpandedInPinned([...this.expandedInPinned]);
         }, 500);
     }
 
     private cleanExpandedSet(): void {
-        const before = this.expanded.size;
-        for (const path of [...this.expanded]) {
-            const match = this.app.vault.getAbstractFileByPath(path);
-            if (!(match instanceof TFolder)) {
-                this.expanded.delete(path);
+        let changed = false;
+        const sanitize = (set: Set<string>) => {
+            for (const path of [...set]) {
+                const match = this.app.vault.getAbstractFileByPath(path);
+                if (!(match instanceof TFolder)) {
+                    set.delete(path);
+                    changed = true;
+                }
             }
-        }
-        if (this.expanded.size !== before) {
+        };
+        sanitize(this.expanded);
+        sanitize(this.expandedInPinned);
+        if (changed) {
             this.queuePersist();
         }
     }

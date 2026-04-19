@@ -13,6 +13,7 @@ export type SortMode = 'alphabet' | 'folders-first' | 'files-first';
 
 interface FileTreeData {
     expanded: string[];
+    expandedInPinned: string[];
     viewRoot: string;
     defaultRoot: string;
     defaultFiletreeView: boolean;
@@ -100,6 +101,7 @@ const SEEDED_SECOND_LEVEL: Record<string, string> = {
 
 const DEFAULT_DATA: FileTreeData = {
     expanded: [],
+    expandedInPinned: [],
     viewRoot: '/',
     defaultRoot: '/',
     defaultFiletreeView: true,
@@ -128,6 +130,9 @@ export default class FileTreePlugin extends Plugin {
         const stored = (await this.loadData()) as Partial<FileTreeData> | null;
         this.data = {
             expanded: Array.isArray(stored?.expanded) ? stored!.expanded!.filter(p => typeof p === 'string') : [],
+            expandedInPinned: Array.isArray(stored?.expandedInPinned)
+                ? stored!.expandedInPinned!.filter(p => typeof p === 'string')
+                : [],
             viewRoot: typeof stored?.viewRoot === 'string' ? stored!.viewRoot! : '/',
             defaultRoot: typeof stored?.defaultRoot === 'string' ? stored!.defaultRoot! : '/',
             defaultFiletreeView: typeof stored?.defaultFiletreeView === 'boolean' ? stored!.defaultFiletreeView! : true,
@@ -257,6 +262,15 @@ export default class FileTreePlugin extends Plugin {
 
     async persistExpanded(paths: string[]): Promise<void> {
         this.data = { ...this.data, expanded: paths };
+        await this.saveData(this.data);
+    }
+
+    getPersistedExpandedInPinned(): string[] {
+        return this.data.expandedInPinned;
+    }
+
+    async persistExpandedInPinned(paths: string[]): Promise<void> {
+        this.data = { ...this.data, expandedInPinned: paths };
         await this.saveData(this.data);
     }
 

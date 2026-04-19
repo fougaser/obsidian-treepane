@@ -325,9 +325,15 @@
     fill: currentColor;
 }
 
-/* When the row is hovered and actions show, hide the static star (actions will include it). */
+/* When the row is hovered and actions show, hide the static star (actions include it). */
 .ft-row:hover .ft-star {
     display: none;
+}
+
+/* Count yields its space to the pin/star actions on hover. Pinned rows are always hovered-like. */
+.ft-row:hover .ft-count,
+.ft-row--pinned .ft-count {
+    visibility: hidden;
 }
 
 /* Star hover action shows yellow when already starred */
