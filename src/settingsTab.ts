@@ -83,9 +83,12 @@ export class FileTreeSettingTab extends PluginSettingTab {
                 dropdown
                     .addOption('1', '1 row')
                     .addOption('2', '2 rows')
+                    .addOption('3', '3 rows')
+                    .addOption('4', '4 rows')
                     .setValue(String(appearance.previewRows))
                     .onChange(async raw => {
-                        const rows = raw === '1' ? 1 : 2;
+                        const n = parseInt(raw, 10);
+                        const rows: 1 | 2 | 3 | 4 = n === 1 || n === 3 || n === 4 ? n : 2;
                         await this.plugin.persistAppearance({ ...this.plugin.getAppearance(), previewRows: rows });
                     })
             );

@@ -1,6 +1,5 @@
-import { ItemView, Menu, setIcon, TAbstractFile, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
+import { ItemView, setIcon, TAbstractFile, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import type FileTreePlugin from './main';
-import type { SortMode } from './main';
 import { iconForFile } from './icons';
 import { attachDnd } from './dnd';
 import { openContextMenu } from './menu';
@@ -180,12 +179,6 @@ export class FileTreeView extends ItemView {
         setIcon(toggleAllBtn, 'chevrons-down');
         toggleAllBtn.addEventListener('click', () => this.handleToggleAll(toggleAllBtn));
 
-        const sortBtn = actions.createSpan({ cls: 'ft-header-btn' });
-        sortBtn.setAttr('role', 'button');
-        sortBtn.setAttr('aria-label', 'Sort order');
-        setIcon(sortBtn, 'arrow-up-down');
-        sortBtn.addEventListener('click', evt => this.openSortMenu(evt));
-
         const appearanceBtn = actions.createSpan({ cls: 'ft-header-btn' });
         appearanceBtn.setAttr('role', 'button');
         appearanceBtn.setAttr('aria-label', 'Appearance');
@@ -201,27 +194,6 @@ export class FileTreeView extends ItemView {
         newNoteBtn.setAttr('aria-label', 'New note in current folder');
         setIcon(newNoteBtn, 'file-plus');
         newNoteBtn.addEventListener('click', () => void this.createNoteInViewRoot());
-    }
-
-    private openSortMenu(evt: MouseEvent): void {
-        const current = this.plugin.getSortMode();
-        const menu = new Menu();
-        const options: Array<{ mode: SortMode; label: string }> = [
-            { mode: 'folders-first', label: 'Folders first' },
-            { mode: 'files-first', label: 'Files first' },
-            { mode: 'alphabet', label: 'Alphabet (mixed)' }
-        ];
-        options.forEach(({ mode, label }) => {
-            menu.addItem(item =>
-                item
-                    .setTitle(label)
-                    .setChecked(current === mode)
-                    .onClick(() => {
-                        void this.plugin.setSortMode(mode);
-                    })
-            );
-        });
-        menu.showAtMouseEvent(evt);
     }
 
     private handleToggleAll(btn: HTMLElement): void {

@@ -2,11 +2,13 @@ import { Plugin, WorkspaceLeaf } from 'obsidian';
 import { FILE_TREE_VIEW_TYPE, FileTreeView } from './view';
 import { FileTreeSettingTab } from './settingsTab';
 
+export type PreviewRows = 1 | 2 | 3 | 4;
+
 export interface FileTreeAppearance {
     showTitle: boolean;
     showDescription: boolean;
     showDate: boolean;
-    previewRows: 1 | 2;
+    previewRows: PreviewRows;
 }
 
 export type SortMode = 'alphabet' | 'folders-first' | 'files-first';

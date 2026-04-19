@@ -1,5 +1,13 @@
 import { App, Modal, Setting } from 'obsidian';
-import type { FileTreeAppearance } from './main';
+import type { FileTreeAppearance, PreviewRows } from './main';
+
+function clampPreviewRows(raw: string): PreviewRows {
+    const n = parseInt(raw, 10);
+    if (n === 1 || n === 2 || n === 3 || n === 4) {
+        return n;
+    }
+    return 2;
+}
 
 export function openAppearanceModal(
     app: App,
@@ -50,9 +58,11 @@ class AppearanceModal extends Modal {
                 dropdown
                     .addOption('1', '1 row')
                     .addOption('2', '2 rows')
+                    .addOption('3', '3 rows')
+                    .addOption('4', '4 rows')
                     .setValue(String(this.value.previewRows))
                     .onChange(raw => {
-                        const parsed = raw === '1' ? 1 : 2;
+                        const parsed = clampPreviewRows(raw);
                         this.value = { ...this.value, previewRows: parsed };
                         this.onApply(this.value);
                     })
