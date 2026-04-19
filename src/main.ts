@@ -9,6 +9,8 @@ export interface FileTreeAppearance {
     previewRows: 1 | 2;
 }
 
+export type SortMode = 'alphabet' | 'folders-first' | 'files-first';
+
 interface FileTreeData {
     expanded: string[];
     viewRoot: string;
@@ -16,6 +18,7 @@ interface FileTreeData {
     defaultFiletreeView: boolean;
     folderIcons: Record<string, string>;
     seededFolderIcons: boolean;
+    sortMode: SortMode;
     appearance: FileTreeAppearance;
 }
 
@@ -45,8 +48,16 @@ const DEFAULT_DATA: FileTreeData = {
     defaultFiletreeView: true,
     folderIcons: {},
     seededFolderIcons: false,
+    sortMode: 'folders-first',
     appearance: DEFAULT_APPEARANCE
 };
+
+function normalizeSortMode(value: unknown): SortMode {
+    if (value === 'alphabet' || value === 'folders-first' || value === 'files-first') {
+        return value;
+    }
+    return 'folders-first';
+}
 
 export default class FileTreePlugin extends Plugin {
     private data: FileTreeData = DEFAULT_DATA;
@@ -60,6 +71,7 @@ export default class FileTreePlugin extends Plugin {
             defaultFiletreeView: typeof stored?.defaultFiletreeView === 'boolean' ? stored!.defaultFiletreeView! : true,
             folderIcons: this.sanitizeFolderIcons(stored?.folderIcons),
             seededFolderIcons: stored?.seededFolderIcons === true,
+            sortMode: normalizeSortMode(stored?.sortMode),
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
 
@@ -158,6 +170,24 @@ export default class FileTreePlugin extends Plugin {
     async persistViewRoot(path: string): Promise<void> {
         this.data = { ...this.data, viewRoot: path };
         await this.saveData(this.data);
+    }
+
+    getSortMode(): SortMode {
+        return this.data.sortMode;
+    }
+
+    async setSortMode(mode: SortMode): Promise<void> {
+        if (this.data.sortMode === mode) {
+            return;
+        }
+        this.data = { ...this.data, sortMode: mode };
+        await this.saveData(this.data);
+        this.app.workspace.getLeavesOfType(FILE_TREE_VIEW_TYPE).forEach(leaf => {
+            const view = leaf.view;
+            if (view instanceof FileTreeView) {
+                view.onAppearanceChanged();
+            }
+        });
     }
 
     getFolderIcon(path: string): string | null {

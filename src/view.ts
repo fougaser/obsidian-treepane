@@ -1,5 +1,6 @@
-import { ItemView, setIcon, TAbstractFile, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
+import { ItemView, Menu, setIcon, TAbstractFile, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import type FileTreePlugin from './main';
+import type { SortMode } from './main';
 import { iconForFile } from './icons';
 import { attachDnd } from './dnd';
 import { openContextMenu } from './menu';
@@ -176,6 +177,12 @@ export class FileTreeView extends ItemView {
         setIcon(toggleAllBtn, 'chevrons-down');
         toggleAllBtn.addEventListener('click', () => this.handleToggleAll(toggleAllBtn));
 
+        const sortBtn = actions.createSpan({ cls: 'ft-header-btn' });
+        sortBtn.setAttr('role', 'button');
+        sortBtn.setAttr('aria-label', 'Sort order');
+        setIcon(sortBtn, 'arrow-up-down');
+        sortBtn.addEventListener('click', evt => this.openSortMenu(evt));
+
         const appearanceBtn = actions.createSpan({ cls: 'ft-header-btn' });
         appearanceBtn.setAttr('role', 'button');
         appearanceBtn.setAttr('aria-label', 'Appearance');
@@ -191,6 +198,27 @@ export class FileTreeView extends ItemView {
         newNoteBtn.setAttr('aria-label', 'New note in current folder');
         setIcon(newNoteBtn, 'file-plus');
         newNoteBtn.addEventListener('click', () => void this.createNoteInViewRoot());
+    }
+
+    private openSortMenu(evt: MouseEvent): void {
+        const current = this.plugin.getSortMode();
+        const menu = new Menu();
+        const options: Array<{ mode: SortMode; label: string }> = [
+            { mode: 'folders-first', label: 'Folders first' },
+            { mode: 'files-first', label: 'Files first' },
+            { mode: 'alphabet', label: 'Alphabet (mixed)' }
+        ];
+        options.forEach(({ mode, label }) => {
+            menu.addItem(item =>
+                item
+                    .setTitle(label)
+                    .setChecked(current === mode)
+                    .onClick(() => {
+                        void this.plugin.setSortMode(mode);
+                    })
+            );
+        });
+        menu.showAtMouseEvent(evt);
     }
 
     private handleToggleAll(btn: HTMLElement): void {
@@ -342,31 +370,39 @@ export class FileTreeView extends ItemView {
                 files.push(child);
             }
         });
-        subfolders.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
-        files.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        const byName = (a: TFolder | TFile, b: TFolder | TFile) =>
+            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+        subfolders.sort(byName);
+        files.sort(byName);
 
-        // At the view root, files render first (before the folder list). Nested levels keep the
-        // folders-first order.
-        const isAtViewRoot = depth === 0;
-        const emitFolders = () => {
-            subfolders.forEach(sub => {
-                this.renderFolderRow(sub, depth);
-                if (this.expanded.has(sub.path)) {
-                    this.renderFolderChildren(sub, depth + 1);
+        const emitFolder = (sub: TFolder) => {
+            this.renderFolderRow(sub, depth);
+            if (this.expanded.has(sub.path)) {
+                this.renderFolderChildren(sub, depth + 1);
+            }
+        };
+        const emitFile = (file: TFile) => this.renderFileRow(file, depth);
+
+        const sortMode = this.plugin.getSortMode();
+        if (sortMode === 'alphabet') {
+            const merged: Array<TFolder | TFile> = [...subfolders, ...files].sort(byName);
+            merged.forEach(item => {
+                if (item instanceof TFolder) {
+                    emitFolder(item);
+                } else {
+                    emitFile(item);
                 }
             });
-        };
-        const emitFiles = () => {
-            files.forEach(file => this.renderFileRow(file, depth));
-        };
-
-        if (isAtViewRoot) {
-            emitFiles();
-            emitFolders();
-        } else {
-            emitFolders();
-            emitFiles();
+            return;
         }
+        if (sortMode === 'files-first') {
+            files.forEach(emitFile);
+            subfolders.forEach(emitFolder);
+            return;
+        }
+        // folders-first (default)
+        subfolders.forEach(emitFolder);
+        files.forEach(emitFile);
     }
 
     private renderFolderRow(folder: TFolder, depth: number): void {
