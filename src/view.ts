@@ -338,6 +338,15 @@ export class FileTreeView extends ItemView {
 
         this.renderFolderChildren(viewRoot, 0);
 
+        // Mark the first top-level file row in the main tree so CSS can give it a bit of
+        // breathing room — separating the initial file run from the header/pinned section.
+        const firstFile = this.scroller.querySelector<HTMLElement>(
+            ':scope > .ft-row--file'
+        );
+        if (firstFile) {
+            firstFile.addClass('ft-row--first-file');
+        }
+
         this.scroller.scrollTop = previousScroll;
 
         if (this.pendingReveal) {

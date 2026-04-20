@@ -84,6 +84,11 @@
     box-sizing: border-box;
 }
 
+/* Slight breathing room above the first file row at the top of the tree. */
+.ft-row--first-file {
+    padding-top: 14px;
+}
+
 /* Vertical guide line under the ancestor folder's chevron. Drawn at the chevron x-column of
    the parent folder (depth - 1). Appears only on nested rows. */
 .ft-row--nested::before {
