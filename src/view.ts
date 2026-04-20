@@ -496,10 +496,14 @@ export class FileTreeView extends ItemView {
             }
         }
 
+        const minimal = Boolean(options.pinned) || this.plugin.isMinimal(isMarkdown ? file.basename : file.name);
         const body = row.createDiv({ cls: 'ft-file-body' });
+        if (minimal) {
+            row.addClass('ft-row--minimal');
+        }
         body.createSpan({ cls: 'ft-name', text: isMarkdown ? file.basename : file.name });
 
-        if (isMarkdown) {
+        if (isMarkdown && !minimal) {
             const preview = body.createSpan({ cls: 'ft-preview' });
             const cached = this.previewCache.get(file.path);
             if (cached !== undefined) {
@@ -514,7 +518,9 @@ export class FileTreeView extends ItemView {
             }
         }
 
-        body.createSpan({ cls: 'ft-date', text: formatDate(file.stat.mtime) });
+        if (!minimal) {
+            body.createSpan({ cls: 'ft-date', text: formatDate(file.stat.mtime) });
+        }
 
         // Persistent star indicator (right side) — yellow when starred.
         if (this.plugin.isStarred(file.path)) {

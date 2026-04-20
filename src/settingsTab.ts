@@ -93,6 +93,25 @@ export class FileTreeSettingTab extends PluginSettingTab {
                     })
             );
 
+        // ---- Minimal files ----
+        new Setting(containerEl).setName('Minimal files').setHeading();
+
+        new Setting(containerEl)
+            .setName('Always minimal (title only)')
+            .setDesc(
+                'One filename per line (without .md). Matches by name anywhere in the vault — all files sharing the listed name render as title only (no preview, no date), regardless of Appearance toggles. Pinned files follow the same rule automatically.'
+            )
+            .addTextArea(text => {
+                text.setPlaceholder('index\nREADME')
+                    .setValue(this.plugin.getMinimalNames().join('\n'));
+                text.inputEl.rows = 6;
+                text.inputEl.style.width = '100%';
+                text.inputEl.addEventListener('blur', async () => {
+                    const names = text.getValue().split('\n');
+                    await this.plugin.setMinimalNames(names);
+                });
+            });
+
         // ---- Root folder ----
         new Setting(containerEl).setName('Root folder').setHeading();
 

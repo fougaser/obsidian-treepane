@@ -27,6 +27,7 @@ interface FileTreeData {
     clearedNonRootColors: boolean;
     pinnedPaths: string[];
     starredFiles: string[];
+    minimalNames: string[];
     sortMode: SortMode;
     appearance: FileTreeAppearance;
 }
@@ -114,6 +115,7 @@ const DEFAULT_DATA: FileTreeData = {
     clearedNonRootColors: false,
     pinnedPaths: [],
     starredFiles: [],
+    minimalNames: [],
     sortMode: 'folders-first',
     appearance: DEFAULT_APPEARANCE
 };
@@ -145,6 +147,7 @@ export default class FileTreePlugin extends Plugin {
             clearedNonRootColors: stored?.clearedNonRootColors === true,
             pinnedPaths: Array.isArray(stored?.pinnedPaths) ? stored!.pinnedPaths!.filter(p => typeof p === 'string') : [],
             starredFiles: Array.isArray(stored?.starredFiles) ? stored!.starredFiles!.filter(p => typeof p === 'string') : [],
+            minimalNames: this.sanitizeMinimalNames(stored?.minimalNames, (stored as { minimalFiles?: unknown })?.minimalFiles),
             sortMode: normalizeSortMode(stored?.sortMode),
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
@@ -377,6 +380,54 @@ export default class FileTreePlugin extends Plugin {
 
     isStarred(path: string): boolean {
         return this.data.starredFiles.includes(path);
+    }
+
+    getMinimalNames(): string[] {
+        return this.data.minimalNames;
+    }
+
+    isMinimal(basename: string): boolean {
+        return this.data.minimalNames.includes(basename);
+    }
+
+    async setMinimalNames(names: string[]): Promise<void> {
+        const deduped = Array.from(
+            new Set(names.map(n => this.normalizeMinimalName(n)).filter(n => n.length > 0))
+        );
+        this.data = { ...this.data, minimalNames: deduped };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    private normalizeMinimalName(raw: string): string {
+        const trimmed = raw.trim();
+        if (!trimmed) {
+            return '';
+        }
+        const lastSlash = trimmed.lastIndexOf('/');
+        const base = lastSlash >= 0 ? trimmed.slice(lastSlash + 1) : trimmed;
+        return base.toLowerCase().endsWith('.md') ? base.slice(0, -3) : base;
+    }
+
+    private sanitizeMinimalNames(current: unknown, legacy: unknown): string[] {
+        const source: unknown[] = [];
+        if (Array.isArray(current)) {
+            source.push(...current);
+        }
+        if (Array.isArray(legacy)) {
+            source.push(...legacy);
+        }
+        const out = new Set<string>();
+        for (const entry of source) {
+            if (typeof entry !== 'string') {
+                continue;
+            }
+            const name = this.normalizeMinimalName(entry);
+            if (name) {
+                out.add(name);
+            }
+        }
+        return [...out];
     }
 
     async toggleStar(path: string): Promise<void> {
