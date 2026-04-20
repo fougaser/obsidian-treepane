@@ -1,6 +1,7 @@
 import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder, setIcon } from 'obsidian';
 import type FileTreePlugin from './main';
-import type { DefaultFolderIconEntry, SortMode } from './main';
+import type { DefaultFolderIconEntry, Grouping, SortBy } from './main';
+import { GROUPING_LABELS, SORT_BY_LABELS } from './main';
 import { IconPickerModal } from './iconPickerModal';
 
 interface DefaultIconRow {
@@ -41,18 +42,30 @@ export class FileTreeSettingTab extends PluginSettingTab {
         new Setting(containerEl).setName('Sort order').setHeading();
 
         new Setting(containerEl)
-            .setName('Default sort')
-            .setDesc('Mirrors the sort button in the Treepane header.')
-            .addDropdown(dropdown =>
-                dropdown
-                    .addOption('folders-first', 'Folders first')
-                    .addOption('files-first', 'Files first')
-                    .addOption('alphabet', 'Alphabet (mixed)')
-                    .setValue(this.plugin.getSortMode())
-                    .onChange(async value => {
-                        await this.plugin.setSortMode(value as SortMode);
-                    })
-            );
+            .setName('Show first')
+            .setDesc('Whether folders or files come first within each parent, or both interleave.')
+            .addDropdown(dropdown => {
+                for (const value of Object.keys(GROUPING_LABELS) as Grouping[]) {
+                    dropdown.addOption(value, GROUPING_LABELS[value]);
+                }
+                dropdown.setValue(this.plugin.getGrouping()).onChange(async value => {
+                    await this.plugin.setGrouping(value as Grouping);
+                });
+            });
+
+        new Setting(containerEl)
+            .setName('Sort by')
+            .setDesc(
+                'Ordering within each group. Dates come from each file\u2019s metadata; folders fall back to name order when sorting by date.'
+            )
+            .addDropdown(dropdown => {
+                for (const value of Object.keys(SORT_BY_LABELS) as SortBy[]) {
+                    dropdown.addOption(value, SORT_BY_LABELS[value]);
+                }
+                dropdown.setValue(this.plugin.getSortBy()).onChange(async value => {
+                    await this.plugin.setSortBy(value as SortBy);
+                });
+            });
 
         // ---- Appearance ----
         new Setting(containerEl).setName('Appearance').setHeading();

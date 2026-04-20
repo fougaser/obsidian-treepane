@@ -1,5 +1,6 @@
 import { ItemView, setIcon, TAbstractFile, TFile, TFolder, WorkspaceLeaf } from 'obsidian';
 import type FileTreePlugin from './main';
+import type { SortBy } from './main';
 import { iconForFile } from './icons';
 import { attachDnd } from './dnd';
 import { openContextMenu } from './menu';
@@ -7,6 +8,49 @@ import { openAppearanceModal } from './appearanceModal';
 import { IconPickerModal } from './iconPickerModal';
 
 const CLICK_DELAY_MS = 220;
+
+type AnyNode = TFolder | TFile;
+
+function byNameAsc(a: AnyNode, b: AnyNode): number {
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+}
+
+function ctime(item: AnyNode): number {
+    return item instanceof TFile ? item.stat.ctime : 0;
+}
+
+function mtime(item: AnyNode): number {
+    return item instanceof TFile ? item.stat.mtime : 0;
+}
+
+function buildComparator(sortBy: SortBy): (a: AnyNode, b: AnyNode) => number {
+    switch (sortBy) {
+        case 'alpha-asc':
+            return byNameAsc;
+        case 'alpha-desc':
+            return (a, b) => -byNameAsc(a, b);
+        case 'created-desc':
+            return (a, b) => {
+                const d = ctime(b) - ctime(a);
+                return d !== 0 ? d : byNameAsc(a, b);
+            };
+        case 'created-asc':
+            return (a, b) => {
+                const d = ctime(a) - ctime(b);
+                return d !== 0 ? d : byNameAsc(a, b);
+            };
+        case 'modified-desc':
+            return (a, b) => {
+                const d = mtime(b) - mtime(a);
+                return d !== 0 ? d : byNameAsc(a, b);
+            };
+        case 'modified-asc':
+            return (a, b) => {
+                const d = mtime(a) - mtime(b);
+                return d !== 0 ? d : byNameAsc(a, b);
+            };
+    }
+}
 
 export const FILE_TREE_VIEW_TYPE = 'obsidian-treepane-view';
 
@@ -377,10 +421,9 @@ export class FileTreeView extends ItemView {
                 files.push(child);
             }
         });
-        const byName = (a: TFolder | TFile, b: TFolder | TFile) =>
-            a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-        subfolders.sort(byName);
-        files.sort(byName);
+        const compare = buildComparator(this.plugin.getSortBy());
+        subfolders.sort(compare);
+        files.sort(compare);
 
         // Split top-pinned items from the rest. Two independent lists — one for folder
         // names, one for file basenames. Within each list, order follows the list order.
@@ -415,29 +458,24 @@ export class FileTreeView extends ItemView {
         };
         const emitFile = (file: TFile) => this.renderFileRow(file, depth, { pinned: ctx === 'pinned', parent: host });
 
-        // The ordering between top-folders and top-files mirrors the general sort mode.
-        // alphabet: merge and sort by name (list-order preference is dropped in this mode).
-        const sortMode = this.plugin.getSortMode();
-        if (sortMode === 'alphabet') {
-            const mergedTop: Array<TFolder | TFile> = [...topFolders, ...topFiles].sort(byName);
-            mergedTop.forEach(item => {
-                if (item instanceof TFolder) {
-                    emitFolder(item);
-                } else {
-                    emitFile(item);
-                }
-            });
-            const mergedRest: Array<TFolder | TFile> = [...restFolders, ...restFiles].sort(byName);
-            mergedRest.forEach(item => {
-                if (item instanceof TFolder) {
-                    emitFolder(item);
-                } else {
-                    emitFile(item);
-                }
-            });
+        // Grouping decides where folders sit relative to files; the comparator decides
+        // ordering within each group. Top-pinned items keep the user's explicit list
+        // order when grouped, and fall back to the comparator in mixed mode (where
+        // interleaving by name/date is the whole point).
+        const grouping = this.plugin.getGrouping();
+        const emit = (item: TFolder | TFile) => {
+            if (item instanceof TFolder) emitFolder(item);
+            else emitFile(item);
+        };
+
+        if (grouping === 'mixed') {
+            const mergedTop: Array<TFolder | TFile> = [...topFolders, ...topFiles].sort(compare);
+            mergedTop.forEach(emit);
+            const mergedRest: Array<TFolder | TFile> = [...restFolders, ...restFiles].sort(compare);
+            mergedRest.forEach(emit);
             return;
         }
-        if (sortMode === 'files-first') {
+        if (grouping === 'files-first') {
             topFiles.forEach(emitFile);
             topFolders.forEach(emitFolder);
             restFiles.forEach(emitFile);

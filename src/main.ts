@@ -11,7 +11,42 @@ export interface FileTreeAppearance {
     previewRows: PreviewRows;
 }
 
+/** Legacy single-axis sort; kept as a type alias for data migration only. */
 export type SortMode = 'alphabet' | 'folders-first' | 'files-first';
+
+export type Grouping = 'folders-first' | 'files-first' | 'mixed';
+export type SortBy =
+    | 'alpha-asc'
+    | 'alpha-desc'
+    | 'created-desc'
+    | 'created-asc'
+    | 'modified-desc'
+    | 'modified-asc';
+
+const GROUPING_VALUES = new Set<Grouping>(['folders-first', 'files-first', 'mixed']);
+const SORT_BY_VALUES = new Set<SortBy>([
+    'alpha-asc',
+    'alpha-desc',
+    'created-desc',
+    'created-asc',
+    'modified-desc',
+    'modified-asc'
+]);
+
+export const SORT_BY_LABELS: Record<SortBy, string> = {
+    'alpha-asc': 'Name (A → Z)',
+    'alpha-desc': 'Name (Z → A)',
+    'created-desc': 'Created (newest first)',
+    'created-asc': 'Created (oldest first)',
+    'modified-desc': 'Modified (newest first)',
+    'modified-asc': 'Modified (oldest first)'
+};
+
+export const GROUPING_LABELS: Record<Grouping, string> = {
+    'folders-first': 'Folders first',
+    'files-first': 'Files first',
+    mixed: 'Mixed (folders and files interleaved)'
+};
 
 export interface DefaultFolderIconEntry {
     icon: string;
@@ -37,7 +72,8 @@ interface FileTreeData {
     topFolderNames: string[];
     /** Fallback icon + color keyed by folder name (case-insensitive match on folder.name). */
     defaultFolderIcons: Record<string, DefaultFolderIconEntry>;
-    sortMode: SortMode;
+    grouping: Grouping;
+    sortBy: SortBy;
     appearance: FileTreeAppearance;
 }
 
@@ -128,15 +164,35 @@ const DEFAULT_DATA: FileTreeData = {
     topFileNames: [],
     topFolderNames: [],
     defaultFolderIcons: {},
-    sortMode: 'folders-first',
+    grouping: 'folders-first',
+    sortBy: 'alpha-asc',
     appearance: DEFAULT_APPEARANCE
 };
 
-function normalizeSortMode(value: unknown): SortMode {
-    if (value === 'alphabet' || value === 'folders-first' || value === 'files-first') {
-        return value;
+function resolveSort(
+    stored: Partial<FileTreeData> & { sortMode?: unknown } | null | undefined
+): { grouping: Grouping; sortBy: SortBy } {
+    // New fields take precedence when present.
+    const grouping =
+        typeof stored?.grouping === 'string' && GROUPING_VALUES.has(stored.grouping as Grouping)
+            ? (stored.grouping as Grouping)
+            : null;
+    const sortBy =
+        typeof stored?.sortBy === 'string' && SORT_BY_VALUES.has(stored.sortBy as SortBy)
+            ? (stored.sortBy as SortBy)
+            : null;
+    if (grouping && sortBy) return { grouping, sortBy };
+
+    // Migrate legacy single-axis setting.
+    const legacy = stored?.sortMode;
+    if (legacy === 'folders-first' || legacy === 'files-first') {
+        return { grouping: grouping ?? legacy, sortBy: sortBy ?? 'alpha-asc' };
     }
-    return 'folders-first';
+    if (legacy === 'alphabet') {
+        return { grouping: grouping ?? 'mixed', sortBy: sortBy ?? 'alpha-asc' };
+    }
+
+    return { grouping: grouping ?? 'folders-first', sortBy: sortBy ?? 'alpha-asc' };
 }
 
 export default class FileTreePlugin extends Plugin {
@@ -163,7 +219,7 @@ export default class FileTreePlugin extends Plugin {
             topFileNames: this.sanitizeMinimalNames(stored?.topFileNames, (stored as { topNames?: unknown })?.topNames),
             topFolderNames: this.sanitizeMinimalNames(stored?.topFolderNames, null),
             defaultFolderIcons: this.sanitizeDefaultFolderIcons(stored?.defaultFolderIcons),
-            sortMode: normalizeSortMode(stored?.sortMode),
+            ...resolveSort(stored),
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
 
@@ -303,16 +359,29 @@ export default class FileTreePlugin extends Plugin {
         await this.saveData(this.data);
     }
 
-    getSortMode(): SortMode {
-        return this.data.sortMode;
+    getGrouping(): Grouping {
+        return this.data.grouping;
     }
 
-    async setSortMode(mode: SortMode): Promise<void> {
-        if (this.data.sortMode === mode) {
-            return;
-        }
-        this.data = { ...this.data, sortMode: mode };
+    async setGrouping(value: Grouping): Promise<void> {
+        if (this.data.grouping === value) return;
+        this.data = { ...this.data, grouping: value };
         await this.saveData(this.data);
+        this.notifyRenderChanged();
+    }
+
+    getSortBy(): SortBy {
+        return this.data.sortBy;
+    }
+
+    async setSortBy(value: SortBy): Promise<void> {
+        if (this.data.sortBy === value) return;
+        this.data = { ...this.data, sortBy: value };
+        await this.saveData(this.data);
+        this.notifyRenderChanged();
+    }
+
+    private notifyRenderChanged(): void {
         this.app.workspace.getLeavesOfType(FILE_TREE_VIEW_TYPE).forEach(leaf => {
             const view = leaf.view;
             if (view instanceof FileTreeView) {
