@@ -28,6 +28,8 @@ interface FileTreeData {
     pinnedPaths: string[];
     starredFiles: string[];
     minimalNames: string[];
+    topFileNames: string[];
+    topFolderNames: string[];
     sortMode: SortMode;
     appearance: FileTreeAppearance;
 }
@@ -116,6 +118,8 @@ const DEFAULT_DATA: FileTreeData = {
     pinnedPaths: [],
     starredFiles: [],
     minimalNames: [],
+    topFileNames: [],
+    topFolderNames: [],
     sortMode: 'folders-first',
     appearance: DEFAULT_APPEARANCE
 };
@@ -148,6 +152,8 @@ export default class FileTreePlugin extends Plugin {
             pinnedPaths: Array.isArray(stored?.pinnedPaths) ? stored!.pinnedPaths!.filter(p => typeof p === 'string') : [],
             starredFiles: Array.isArray(stored?.starredFiles) ? stored!.starredFiles!.filter(p => typeof p === 'string') : [],
             minimalNames: this.sanitizeMinimalNames(stored?.minimalNames, (stored as { minimalFiles?: unknown })?.minimalFiles),
+            topFileNames: this.sanitizeMinimalNames(stored?.topFileNames, (stored as { topNames?: unknown })?.topNames),
+            topFolderNames: this.sanitizeMinimalNames(stored?.topFolderNames, null),
             sortMode: normalizeSortMode(stored?.sortMode),
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
@@ -391,12 +397,55 @@ export default class FileTreePlugin extends Plugin {
     }
 
     async setMinimalNames(names: string[]): Promise<void> {
-        const deduped = Array.from(
-            new Set(names.map(n => this.normalizeMinimalName(n)).filter(n => n.length > 0))
-        );
+        const deduped = this.dedupeNames(names);
         this.data = { ...this.data, minimalNames: deduped };
         await this.saveData(this.data);
         this.notifyViews();
+    }
+
+    getTopFileNames(): string[] {
+        return this.data.topFileNames;
+    }
+
+    getTopFolderNames(): string[] {
+        return this.data.topFolderNames;
+    }
+
+    topFilePriority(basename: string): number {
+        const idx = this.data.topFileNames.indexOf(basename);
+        return idx < 0 ? -1 : idx;
+    }
+
+    topFolderPriority(name: string): number {
+        const idx = this.data.topFolderNames.indexOf(name);
+        return idx < 0 ? -1 : idx;
+    }
+
+    async setTopFileNames(names: string[]): Promise<void> {
+        const deduped = this.dedupeNames(names);
+        this.data = { ...this.data, topFileNames: deduped };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    async setTopFolderNames(names: string[]): Promise<void> {
+        const deduped = this.dedupeNames(names);
+        this.data = { ...this.data, topFolderNames: deduped };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    private dedupeNames(names: string[]): string[] {
+        const seen = new Set<string>();
+        const out: string[] = [];
+        for (const raw of names) {
+            const n = this.normalizeMinimalName(raw);
+            if (n && !seen.has(n)) {
+                seen.add(n);
+                out.push(n);
+            }
+        }
+        return out;
     }
 
     private normalizeMinimalName(raw: string): string {

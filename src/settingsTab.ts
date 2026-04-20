@@ -93,6 +93,45 @@ export class FileTreeSettingTab extends PluginSettingTab {
                     })
             );
 
+        // ---- Always on top ----
+        new Setting(containerEl).setName('Always on top').setHeading();
+
+        const topHint = containerEl.createEl('p', {
+            text:
+                'Ordering between the Folders-on-top and Files-on-top groups follows the general Sort order above (e.g. in "Files first" mode, top files appear before top folders).'
+        });
+        topHint.style.marginTop = '0';
+        topHint.style.color = 'var(--text-muted)';
+        topHint.style.fontSize = 'var(--font-ui-smaller)';
+
+        new Setting(containerEl)
+            .setName('Folders on top')
+            .setDesc('One folder name per line. Matching subfolders pin to the top of their parent folder. List order = display order.')
+            .addTextArea(text => {
+                text.setPlaceholder('_templates\nInbox')
+                    .setValue(this.plugin.getTopFolderNames().join('\n'));
+                text.inputEl.rows = 5;
+                text.inputEl.style.width = '100%';
+                text.inputEl.addEventListener('blur', async () => {
+                    const names = text.getValue().split('\n');
+                    await this.plugin.setTopFolderNames(names);
+                });
+            });
+
+        new Setting(containerEl)
+            .setName('Files on top')
+            .setDesc('One filename per line (without .md). Matching files pin to the top of their parent folder. List order = display order.')
+            .addTextArea(text => {
+                text.setPlaceholder('index\n_overview')
+                    .setValue(this.plugin.getTopFileNames().join('\n'));
+                text.inputEl.rows = 5;
+                text.inputEl.style.width = '100%';
+                text.inputEl.addEventListener('blur', async () => {
+                    const names = text.getValue().split('\n');
+                    await this.plugin.setTopFileNames(names);
+                });
+            });
+
         // ---- Minimal files ----
         new Setting(containerEl).setName('Minimal files').setHeading();
 

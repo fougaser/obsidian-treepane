@@ -373,6 +373,30 @@ export class FileTreeView extends ItemView {
         subfolders.sort(byName);
         files.sort(byName);
 
+        // Split top-pinned items from the rest. Two independent lists — one for folder
+        // names, one for file basenames. Within each list, order follows the list order.
+        const fileKey = (f: TFile) => (f.extension.toLowerCase() === 'md' ? f.basename : f.name);
+        const topFolders: TFolder[] = [];
+        const restFolders: TFolder[] = [];
+        const topFiles: TFile[] = [];
+        const restFiles: TFile[] = [];
+        for (const sub of subfolders) {
+            if (this.plugin.topFolderPriority(sub.name) >= 0) {
+                topFolders.push(sub);
+            } else {
+                restFolders.push(sub);
+            }
+        }
+        for (const file of files) {
+            if (this.plugin.topFilePriority(fileKey(file)) >= 0) {
+                topFiles.push(file);
+            } else {
+                restFiles.push(file);
+            }
+        }
+        topFolders.sort((a, b) => this.plugin.topFolderPriority(a.name) - this.plugin.topFolderPriority(b.name));
+        topFiles.sort((a, b) => this.plugin.topFilePriority(fileKey(a)) - this.plugin.topFilePriority(fileKey(b)));
+
         const expandedSet = ctx === 'pinned' ? this.expandedInPinned : this.expanded;
         const emitFolder = (sub: TFolder) => {
             this.renderFolderRow(sub, depth, { pinned: ctx === 'pinned', parent: host });
@@ -382,10 +406,20 @@ export class FileTreeView extends ItemView {
         };
         const emitFile = (file: TFile) => this.renderFileRow(file, depth, { pinned: ctx === 'pinned', parent: host });
 
+        // The ordering between top-folders and top-files mirrors the general sort mode.
+        // alphabet: merge and sort by name (list-order preference is dropped in this mode).
         const sortMode = this.plugin.getSortMode();
         if (sortMode === 'alphabet') {
-            const merged: Array<TFolder | TFile> = [...subfolders, ...files].sort(byName);
-            merged.forEach(item => {
+            const mergedTop: Array<TFolder | TFile> = [...topFolders, ...topFiles].sort(byName);
+            mergedTop.forEach(item => {
+                if (item instanceof TFolder) {
+                    emitFolder(item);
+                } else {
+                    emitFile(item);
+                }
+            });
+            const mergedRest: Array<TFolder | TFile> = [...restFolders, ...restFiles].sort(byName);
+            mergedRest.forEach(item => {
                 if (item instanceof TFolder) {
                     emitFolder(item);
                 } else {
@@ -395,13 +429,17 @@ export class FileTreeView extends ItemView {
             return;
         }
         if (sortMode === 'files-first') {
-            files.forEach(emitFile);
-            subfolders.forEach(emitFolder);
+            topFiles.forEach(emitFile);
+            topFolders.forEach(emitFolder);
+            restFiles.forEach(emitFile);
+            restFolders.forEach(emitFolder);
             return;
         }
         // folders-first (default)
-        subfolders.forEach(emitFolder);
-        files.forEach(emitFile);
+        topFolders.forEach(emitFolder);
+        topFiles.forEach(emitFile);
+        restFolders.forEach(emitFolder);
+        restFiles.forEach(emitFile);
     }
 
     private renderFolderRow(folder: TFolder, depth: number, options: { pinned?: boolean; parent?: HTMLElement } = {}): void {
