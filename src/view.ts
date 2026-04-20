@@ -482,15 +482,20 @@ export class FileTreeView extends ItemView {
 
         const icon = row.createSpan({ cls: 'ft-icon' });
         const customIcon = this.plugin.getFolderIcon(folder.path);
+        const nameDefault = customIcon ? null : this.plugin.getDefaultIconForName(folder.name);
         if (customIcon) {
             setIcon(icon, customIcon);
+            row.addClass('ft-row--custom-icon');
+        } else if (nameDefault) {
+            setIcon(icon, nameDefault.icon);
             row.addClass('ft-row--custom-icon');
         } else {
             setIcon(icon, isExpanded ? 'folder-open' : 'folder');
         }
-        const folderColor = this.plugin.getFolderColor(folder.path);
-        if (folderColor) {
-            icon.style.color = folderColor;
+        const userColor = this.plugin.getFolderColor(folder.path);
+        const resolvedColor = userColor ?? (customIcon ? null : nameDefault?.color ?? null);
+        if (resolvedColor) {
+            icon.style.color = resolvedColor;
         }
 
         row.createSpan({ cls: 'ft-name', text: folder.name || this.app.vault.getName() });

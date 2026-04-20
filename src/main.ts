@@ -13,6 +13,11 @@ export interface FileTreeAppearance {
 
 export type SortMode = 'alphabet' | 'folders-first' | 'files-first';
 
+export interface DefaultFolderIconEntry {
+    icon: string;
+    color: string | null;
+}
+
 interface FileTreeData {
     expanded: string[];
     expandedInPinned: string[];
@@ -30,6 +35,8 @@ interface FileTreeData {
     minimalNames: string[];
     topFileNames: string[];
     topFolderNames: string[];
+    /** Fallback icon + color keyed by folder name (case-insensitive match on folder.name). */
+    defaultFolderIcons: Record<string, DefaultFolderIconEntry>;
     sortMode: SortMode;
     appearance: FileTreeAppearance;
 }
@@ -120,6 +127,7 @@ const DEFAULT_DATA: FileTreeData = {
     minimalNames: [],
     topFileNames: [],
     topFolderNames: [],
+    defaultFolderIcons: {},
     sortMode: 'folders-first',
     appearance: DEFAULT_APPEARANCE
 };
@@ -154,6 +162,7 @@ export default class FileTreePlugin extends Plugin {
             minimalNames: this.sanitizeMinimalNames(stored?.minimalNames, (stored as { minimalFiles?: unknown })?.minimalFiles),
             topFileNames: this.sanitizeMinimalNames(stored?.topFileNames, (stored as { topNames?: unknown })?.topNames),
             topFolderNames: this.sanitizeMinimalNames(stored?.topFolderNames, null),
+            defaultFolderIcons: this.sanitizeDefaultFolderIcons(stored?.defaultFolderIcons),
             sortMode: normalizeSortMode(stored?.sortMode),
             appearance: { ...DEFAULT_APPEARANCE, ...(stored?.appearance ?? {}) }
         };
@@ -199,6 +208,10 @@ export default class FileTreePlugin extends Plugin {
 
         this.registerView(FILE_TREE_VIEW_TYPE, leaf => new FileTreeView(leaf, this));
         this.addSettingTab(new FileTreeSettingTab(this.app, this));
+
+        this.addRibbonIcon('folder-tree', 'Open treepane', () => {
+            void this.activateView();
+        });
 
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', leaf => {
@@ -311,6 +324,57 @@ export default class FileTreePlugin extends Plugin {
     getFolderIcon(path: string): string | null {
         const icon = this.data.folderIcons[path];
         return typeof icon === 'string' && icon.length > 0 ? icon : null;
+    }
+
+    /** Name-based fallback icon + color. User-set path icons (getFolderIcon) take precedence. */
+    getDefaultIconForName(name: string): DefaultFolderIconEntry | null {
+        const key = name.toLowerCase();
+        const entry = this.data.defaultFolderIcons[key];
+        return entry && typeof entry.icon === 'string' && entry.icon.length > 0 ? entry : null;
+    }
+
+    getDefaultFolderIcons(): Record<string, DefaultFolderIconEntry> {
+        return this.data.defaultFolderIcons;
+    }
+
+    async setDefaultFolderIcons(map: Record<string, DefaultFolderIconEntry>): Promise<void> {
+        this.data = { ...this.data, defaultFolderIcons: this.sanitizeDefaultFolderIcons(map) };
+        await this.saveData(this.data);
+        this.notifyViews();
+    }
+
+    private sanitizeDefaultFolderIcons(raw: unknown): Record<string, DefaultFolderIconEntry> {
+        if (!raw || typeof raw !== 'object') {
+            return {};
+        }
+        const out: Record<string, DefaultFolderIconEntry> = {};
+        for (const [key, rawValue] of Object.entries(raw as Record<string, unknown>)) {
+            if (typeof key !== 'string') {
+                continue;
+            }
+            const name = key.trim().toLowerCase();
+            if (!name) {
+                continue;
+            }
+            // Legacy format: plain icon string; upgrade to { icon, color: null }.
+            if (typeof rawValue === 'string') {
+                const icon = rawValue.trim();
+                if (icon) {
+                    out[name] = { icon, color: null };
+                }
+                continue;
+            }
+            if (rawValue && typeof rawValue === 'object') {
+                const obj = rawValue as { icon?: unknown; color?: unknown };
+                const icon = typeof obj.icon === 'string' ? obj.icon.trim() : '';
+                if (!icon) {
+                    continue;
+                }
+                const color = typeof obj.color === 'string' && obj.color.trim().length > 0 ? obj.color.trim() : null;
+                out[name] = { icon, color };
+            }
+        }
+        return out;
     }
 
     async setFolderIcon(path: string, icon: string | null): Promise<void> {

@@ -1,6 +1,13 @@
-import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder } from 'obsidian';
+import { AbstractInputSuggest, App, PluginSettingTab, Setting, TFolder, setIcon } from 'obsidian';
 import type FileTreePlugin from './main';
-import type { SortMode } from './main';
+import type { DefaultFolderIconEntry, SortMode } from './main';
+import { IconPickerModal } from './iconPickerModal';
+
+interface DefaultIconRow {
+    name: string;
+    icon: string;
+    color: string | null;
+}
 
 export class FileTreeSettingTab extends PluginSettingTab {
     private readonly plugin: FileTreePlugin;
@@ -151,6 +158,19 @@ export class FileTreeSettingTab extends PluginSettingTab {
                 });
             });
 
+        // ---- Default folder icons by name ----
+        new Setting(containerEl).setName('Default folder icons by name').setHeading();
+
+        const defaultHint = containerEl.createEl('p', {
+            text:
+                'Folders matching any of these names (case-insensitive) get this icon and color by default. Icons you set manually via the icon picker always win over these defaults.'
+        });
+        defaultHint.style.marginTop = '0';
+        defaultHint.style.color = 'var(--text-muted)';
+        defaultHint.style.fontSize = 'var(--font-ui-smaller)';
+
+        this.renderDefaultIconList(containerEl);
+
         // ---- Root folder ----
         new Setting(containerEl).setName('Root folder').setHeading();
 
@@ -168,6 +188,127 @@ export class FileTreeSettingTab extends PluginSettingTab {
                     await this.plugin.setDefaultRoot(trimmed === '' ? '/' : trimmed);
                 });
             });
+    }
+
+    /**
+     * Editable list of (folder name → icon + color) defaults. Each entry has its own
+     * name input, an icon swatch that opens the IconPickerModal, and a delete button.
+     * "+" at the bottom appends a fresh row. Changes persist on blur / modal confirm.
+     */
+    private renderDefaultIconList(parent: HTMLElement): void {
+        const section = parent.createDiv({ cls: 'ft-default-icons' });
+        section.style.display = 'flex';
+        section.style.flexDirection = 'column';
+        section.style.gap = '6px';
+        section.style.margin = '4px 0 12px';
+
+        const listEl = section.createDiv();
+        listEl.style.display = 'flex';
+        listEl.style.flexDirection = 'column';
+        listEl.style.gap = '6px';
+
+        const stored = this.plugin.getDefaultFolderIcons();
+        const rows: DefaultIconRow[] = Object.entries(stored).map(([name, entry]) => ({
+            name,
+            icon: entry.icon,
+            color: entry.color ?? null
+        }));
+
+        const persist = async () => {
+            const map: Record<string, DefaultFolderIconEntry> = {};
+            for (const row of rows) {
+                const name = row.name.trim().toLowerCase();
+                if (!name || !row.icon) {
+                    continue;
+                }
+                map[name] = { icon: row.icon, color: row.color };
+            }
+            await this.plugin.setDefaultFolderIcons(map);
+        };
+
+        const draw = () => {
+            listEl.empty();
+            rows.forEach((row, index) => this.renderDefaultIconRow(listEl, row, index, rows, draw, persist));
+        };
+
+        draw();
+
+        const addBtn = section.createEl('button', { text: '+ Add folder name' });
+        addBtn.style.alignSelf = 'flex-start';
+        addBtn.addEventListener('click', () => {
+            rows.push({ name: '', icon: 'folder', color: null });
+            draw();
+            void persist();
+        });
+    }
+
+    private renderDefaultIconRow(
+        parent: HTMLElement,
+        row: DefaultIconRow,
+        index: number,
+        rows: DefaultIconRow[],
+        draw: () => void,
+        persist: () => Promise<void>
+    ): void {
+        const line = parent.createDiv();
+        line.style.display = 'flex';
+        line.style.alignItems = 'center';
+        line.style.gap = '8px';
+
+        const swatch = line.createSpan({ cls: 'ft-default-icon-swatch' });
+        swatch.setAttr('role', 'button');
+        swatch.title = 'Change icon and color';
+        swatch.style.display = 'inline-flex';
+        swatch.style.alignItems = 'center';
+        swatch.style.justifyContent = 'center';
+        swatch.style.width = '28px';
+        swatch.style.height = '28px';
+        swatch.style.borderRadius = '6px';
+        swatch.style.border = '1px solid var(--background-modifier-border)';
+        swatch.style.cursor = 'pointer';
+        swatch.style.flex = '0 0 auto';
+        setIcon(swatch, row.icon || 'folder');
+        if (row.color) {
+            swatch.style.color = row.color;
+        }
+        swatch.addEventListener('click', () => {
+            new IconPickerModal(this.app, {
+                currentIconId: row.icon || null,
+                currentColor: row.color,
+                onPick: (iconId, color) => {
+                    row.icon = iconId ?? 'folder';
+                    row.color = color;
+                    draw();
+                    void persist();
+                }
+            }).open();
+        });
+
+        const input = line.createEl('input', { type: 'text' });
+        input.placeholder = 'Folder name (e.g. Projects)';
+        input.value = row.name;
+        input.style.flex = '1 1 auto';
+        input.addEventListener('change', () => {
+            row.name = input.value;
+            void persist();
+        });
+        input.addEventListener('blur', () => {
+            if (row.name !== input.value) {
+                row.name = input.value;
+                void persist();
+            }
+        });
+
+        const removeBtn = line.createEl('button');
+        removeBtn.setAttr('aria-label', 'Remove');
+        removeBtn.title = 'Remove';
+        removeBtn.style.flex = '0 0 auto';
+        setIcon(removeBtn, 'trash');
+        removeBtn.addEventListener('click', () => {
+            rows.splice(index, 1);
+            draw();
+            void persist();
+        });
     }
 }
 
