@@ -1,4 +1,5 @@
 import { App, FileSystemAdapter, Notice, TAbstractFile, TFile, TFolder } from 'obsidian';
+import { openImportModal } from './importModal';
 
 const INTERNAL_MIME = 'application/x-file-tree';
 
@@ -59,12 +60,13 @@ export function attachDnd(
         if (!e.dataTransfer) {
             return;
         }
-        // Internal drag only — external file drops are ignored in this MVP.
-        if (!e.dataTransfer.types.includes(INTERNAL_MIME)) {
+        const isInternal = e.dataTransfer.types.includes(INTERNAL_MIME);
+        const isExternalFile = e.dataTransfer.types.includes('Files');
+        if (!isInternal && !isExternalFile) {
             return;
         }
         e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
+        e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy';
 
         const target = folderTargetFromEvent(e);
         if (target !== currentDropTarget) {
@@ -90,12 +92,14 @@ export function attachDnd(
         if (!e.dataTransfer) {
             return;
         }
+        const targetRow = currentDropTarget;
         const srcPath = e.dataTransfer.getData(INTERNAL_MIME);
-        if (!srcPath) {
+        const externalFiles = Array.from(e.dataTransfer.files);
+
+        if (!srcPath && externalFiles.length === 0) {
             return;
         }
         e.preventDefault();
-        const targetRow = currentDropTarget;
         clearDropTarget();
         if (!targetRow) {
             return;
@@ -104,14 +108,21 @@ export function attachDnd(
         if (!targetPath) {
             return;
         }
-
-        const src = getByPath(srcPath);
         const target = getByPath(targetPath);
-        if (!src || !(target instanceof TFolder)) {
+        if (!(target instanceof TFolder)) {
             return;
         }
 
-        performMove(app, src, target);
+        if (srcPath) {
+            const src = getByPath(srcPath);
+            if (src) {
+                performMove(app, src, target);
+            }
+            return;
+        }
+
+        // External file drop — open a confirm+rename modal for each file, one at a time.
+        externalFiles.forEach(f => openImportModal(app, { file: f, target }));
     });
 }
 
